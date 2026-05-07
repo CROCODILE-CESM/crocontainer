@@ -1,0 +1,3 @@
+[submodule "CrocoDash"]
+	path = CrocoDash
+	url = git@github.com:CROCODILE-CESM/CrocoDash.git
