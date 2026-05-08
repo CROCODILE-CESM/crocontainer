@@ -6,9 +6,7 @@ podman run --rm \
   crotainer
 
 # Debugging
-podman run --rm -it \
-  -v /home/manishrv/crocontainer/panama-crocontainer_case_bundle:/workspace/bundle \
-  localhost/crocontainer bash
+podman run -it --rm -v /Users/manishrv/crocontainer/panama-crocontainer_case_bundle:/workspace/bundle --name crodebug crocontainer:latest bash
 
 # Bundle Command
 crocodash read --caseroot /home/manishrv/croc_cases/panama-crocontainer --output-dir /home/manishrv/crocontainer --cesmroot /home/manishrv/CROCESM --machine ubuntu-latest --project PROJ123
