@@ -26,6 +26,8 @@ podman build -t crocontainer:latest .
 
 # Build for Linux/Derecho (amd64 architecture)
 podman build --platform linux/amd64 -t crocontainer:amd64 .
+podman tag crocontainer:amd64 ghcr.io/crocodile-cesm/crocontainer:amd64
+podman push ghcr.io/crocodile-cesm/crocontainer:amd64
 
 # Pull from GitHub registry to Apptainer .sif (run on a compute node, takes ~1hr)
 export APPTAINER_TMPDIR=/glade/derecho/scratch/manishrv/crocontainer/tmp

@@ -20,4 +20,6 @@ export OMPI_FC=gfortran
 export OMPI_CXX=g++
 unset NCAR_HOST
 ./case.build
+cp CaseDocs/datm.streams.xml .
+sed -i 's/<year_align>1<\/year_align>/<year_align>1958<\/year_align>/g' datm.streams.xml
 ./case.submit --no-batch

@@ -113,5 +113,11 @@ COPY inside_container_create_case.py /workspace/inside_container_create_case.py
 RUN bash /workspace/fake_datm_files.sh
 COPY run_case.sh /workspace/run_case.sh
 RUN chmod +x /workspace/run_case.sh
- 
+
+# Create Mount Points
+RUN mkdir -p /glade
+RUN mkdir -p /workspace/bundle
+
+RUN mkdir -p /root/cesm/inputdata
+RUN mkdir -p /root/cesm/scratch
 # CMD ["/workspace/run_crocontainer.sh"]
