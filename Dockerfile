@@ -119,4 +119,5 @@ RUN mkdir -p /workspace/bundle
 
 RUN mkdir -p /root/cesm/inputdata
 RUN mkdir -p /root/cesm/scratch
+RUN git config --global user.email "you@example.com" && git config --global user.name "Your Name"
 # CMD ["/workspace/run_crocontainer.sh"]
