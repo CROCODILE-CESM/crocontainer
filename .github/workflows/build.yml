@@ -11,8 +11,6 @@ env:
 
 jobs:
   build-and-push:
-    runs-size: ubuntu-latest
-    # Large repositories compiling ESMF/CESM benefit from bigger runners if available
     runs-on: ubuntu-latest 
     permissions:
       contents: read
