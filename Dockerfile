@@ -108,11 +108,10 @@ ENV OMPI_ALLOW_RUN_AS_ROOT=1 \
     # Force OpenMPI to use basic TCP communication to avoid "No such device" errors
     OMPI_MCA_btl=self,tcp
 
-# --- STEP 7: RUN SCRIPT ---
+# --- STEP 7: RUN SCRIPT --
 COPY inside_container_create_case.py /workspace/inside_container_create_case.py
-COPY fake_datm_files.sh /workspace/fake_datm_files.sh
 RUN bash /workspace/fake_datm_files.sh
-COPY run_crocontainer.sh /workspace/run_crocontainer.sh
-RUN chmod +x /workspace/run_crocontainer.sh
+COPY run_case.sh /workspace/run_case.sh
+RUN chmod +x /workspace/run_case.sh
  
 # CMD ["/workspace/run_crocontainer.sh"]

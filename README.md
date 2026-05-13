@@ -1,14 +1,14 @@
 # CrocoDash Container Commands
 
 ## Concepts
-# - Podman: Docker-like, writable layers by default. Good for local/Mac use.
-# - Apptainer: HPC-focused, read-only by default. Used on Derecho.
-# - Bundle: A directory containing all files needed to recreate a CESM case.
-# - Sandbox: An unpacked, writable version of an Apptainer .sif image.
+ - Podman: Docker-like, writable layers by default. Good for local/Mac use.
+ - Apptainer: HPC-focused, read-only by default. Used on Derecho.
+ - Bundle: A directory containing all files needed to recreate a CESM case.
+ - Sandbox: An unpacked, writable version of an Apptainer .sif image.
 
 ---
 
-## Bundle Creation (on Derecho, outside container)
+# Bundle Creation (on Derecho, outside container)
 # Packages an existing CESM case into a bundle for use inside the container
 crocodash read \
   --caseroot /glade/u/home/manishrv/croc_cases/vcg.xml.4 \
@@ -77,6 +77,19 @@ apptainer shell \
 # Step 3: Inside container - activate conda
 source /opt/conda/etc/profile.d/conda.sh
 conda activate CrocoDash
+unset NCAR_HOST
+cd /workspace
+
+export DIN_LOC_ROOT=/root/cesm/inputdata
+
+python inside_container_create_case.py 
+conda deactivate 
+export DIN_LOC_ROOT=/root/cesm/inputdata
+
+export ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1)
+export OMPI_CC=gcc
+export OMPI_FC=gfortran
+export OMPI_CXX=g++
 
 # Step 4: Inside container - run script
 cd /workspace

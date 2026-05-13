@@ -1,0 +1,20 @@
+#!/bin/bash
+source /opt/conda/etc/profile.d/conda.sh
+conda activate CrocoDash
+unset NCAR_HOST
+
+cd /workspace
+python inside_container_create_case.py
+
+export DIN_LOC_ROOT=/root/cesm/inputdata
+export ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1)
+export OMPI_CC=gcc
+export OMPI_FC=gfortran
+export OMPI_CXX=g++
+
+cd /workspace/case
+./xmlchange NTASKS=1
+./case.setup --reset
+./xmlchange DIN_LOC_ROOT=/root/cesm/inputdata
+./case.build
+./case.submit &
