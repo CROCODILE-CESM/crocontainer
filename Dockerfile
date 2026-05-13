@@ -75,7 +75,7 @@ RUN printf "Metadata-Version: 2.1\nName: rm6\nVersion: 0.1.0\n" > /workspace/Cro
 RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
     conda env create -f /workspace/CrocoDash/environment.yml -y
-RUN conda init bash
+RUN source /opt/conda/etc/profile.d/conda.sh
 
 # --- STEP 5: GIT CONFIG ---
 RUN git config --global user.email "crotainer@crocodile-cesm.org" && \
@@ -116,8 +116,5 @@ RUN chmod +x /workspace/run_case.sh
 # Create Mount Points
 RUN mkdir -p /glade
 RUN mkdir -p /workspace/bundle
-
 RUN mkdir -p /root/cesm/inputdata
 RUN mkdir -p /root/cesm/scratch
-RUN git config --global user.email "you@example.com" && git config --global user.name "Your Name"
-# CMD ["/workspace/run_crocontainer.sh"]
