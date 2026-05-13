@@ -64,6 +64,7 @@ podman run -it --rm \
 
 # Step 1: Build sandbox from .sif (takes a few minutes, done once)
 apptainer build --sandbox workspace_sandbox/ crocontainer_amd64.sif
+apptainer build --sandbox workspace_sandbox/ docker://ghcr.io/crocodile-cesm/crocontainer:amd64
 
 # Step 2: Shell into sandbox
 # Flags:
@@ -75,7 +76,17 @@ apptainer shell \
   --bind /glade/derecho/scratch/manishrv:/root/cesm/scratch \
   --bind /glade/derecho/scratch/manishrv/crocontainer/bundles/vcg.xml.4_case_bundle:/workspace/bundle \
   workspace_sandbox/
+apptainer exec   --writable   --bind /glade/campaign/cesm/cesmdata/inputdata:/root/cesm/inputdata   --bind /glade/derecho/scratch/manishrv:/root/cesm/scratch   --bind /glade/derecho/scratch/manishrv/crocontainer/bundles/vcg.xml.4_case_bundle:/workspace/bundle   workspace_sandbox/   /bin/bash /workspace/run_case.sh
 
+apptainer exec   --writable
+>   --env OMPI_CC=gcc \
+>   --env OMPI_FC=gfortran \
+>   --env OMPI_CXX=g++ \
+>   --bind /glade/campaign/cesm/cesmdata/inputdata:/root/cesm/inputdata \
+>   --bind /glade/derecho/scratch/manishrv:/root/cesm/scratch \
+>   --bind /glade/derecho/scratch/manishrv/crocontainer/bundles/vcg.xml.4_case_bundle:/workspace/bundle \
+>   workspace_sandbox/ \
+>   /bin/bash /workspace/run_case.sh
 # Step 3: Inside container - activate conda
 source /opt/conda/etc/profile.d/conda.sh
 conda activate CrocoDash

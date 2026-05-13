@@ -7,14 +7,17 @@ cd /workspace
 python inside_container_create_case.py
 
 export DIN_LOC_ROOT=/root/cesm/inputdata
-export ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1)
-export OMPI_CC=gcc
-export OMPI_FC=gfortran
-export OMPI_CXX=g++
+
 
 cd /workspace/case
 ./xmlchange NTASKS=1
 ./case.setup --reset
 ./xmlchange DIN_LOC_ROOT=/root/cesm/inputdata
+conda deactivate
+export ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1)
+export OMPI_CC=gcc
+export OMPI_FC=gfortran
+export OMPI_CXX=g++
+unset NCAR_HOST
 ./case.build
-./case.submit &
+./case.submit --no-batch
