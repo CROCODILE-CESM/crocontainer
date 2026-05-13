@@ -17,8 +17,8 @@ def main():
         )
     os.environ["USER"] = "root"
     case = forker.fork(
-    plan={"xml_files": True, "user_nl": True, "source_mods": True, "xmlchanges": True},
-    compset = forker.manifest["init_args"]["compset"],
+    plan={"xml_files": True, "user_nl": True, "source_mods": True, "xmlchanges": False},
+    compset = "1850_DATM%JRA_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV_SESP",
     extra_configs=[],                   # additional forcing configs to add
     remove_configs=[],                    # forcing configs to drop
     )
