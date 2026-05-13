@@ -110,7 +110,6 @@ ENV OMPI_ALLOW_RUN_AS_ROOT=1 \
 
 # --- STEP 7: RUN SCRIPT --
 COPY inside_container_create_case.py /workspace/inside_container_create_case.py
-RUN bash /workspace/fake_datm_files.sh
 COPY run_case.sh /workspace/run_case.sh
 RUN chmod +x /workspace/run_case.sh
 
