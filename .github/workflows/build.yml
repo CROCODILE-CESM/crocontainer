@@ -65,7 +65,8 @@ jobs:
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.arch.outputs.suffix }}
+                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-${{ steps.arch.outputs.suffix }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
@@ -88,7 +89,9 @@ jobs:
       - name: Create multi-arch manifest
         run: |
           BASE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          SHA=$(echo ${{ github.sha }} | cut -c1-7)
           docker buildx imagetools create \
             --tag ${BASE}:latest \
+            --tag ${BASE}:sha-${SHA} \
             ${BASE}:latest-amd64 \
             ${BASE}:latest-arm64
