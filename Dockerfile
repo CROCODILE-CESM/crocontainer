@@ -1,5 +1,6 @@
-# --- STEP 1: OS & TOOLCHAIN ---
+# --- OS & TOOLCHAIN ---
 FROM ubuntu:latest
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Compilers
     gfortran g++ gcc \
@@ -21,7 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN ln -s /usr/lib/$(uname -m)-linux-gnu/libnetcdf.so /usr/lib/libnetcdf.so && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libnetcdff.so /usr/lib/libnetcdff.so && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libpnetcdf.a /usr/lib/libpnetcdf.a
-# --- STEP 4: ESMF ENVIRONMENT ---
+
+# --- ESMF ENVIRONMENT ---
 ENV ESMF_DIR=/usr/local/esmf \
     ESMF_INSTALL_PREFIX=/usr/local/esmf/install \
     ESMF_COMM=openmpi \
@@ -31,7 +33,7 @@ ENV ESMF_DIR=/usr/local/esmf \
     ESMF_NETCDF_INCLUDE=/usr/include \
     ESMF_BOPT=O
 
-# --- STEP 5: BUILD ESMF FROM SOURCE ---
+# --- BUILD ESMF FROM SOURCE ---
 RUN mkdir -p ${ESMF_DIR} && \
     cd /usr/local && \
     # Clone specific tag v8.9.1
@@ -44,9 +46,8 @@ RUN mkdir -p ${ESMF_DIR} && \
     # Clean up to save space
     make clean
 
-# 3. Update the Pointer for CESM
 
-# --- STEP 2: CONDA ---
+# --- CONDA ---
 ENV CONDA_DIR=/opt/conda
 ENV PATH=$CONDA_DIR/bin:$PATH
 
@@ -63,13 +64,13 @@ RUN apt-get update && apt-get install -y curl && \
     apt-get purge -y --auto-remove curl && \
     rm -rf /var/lib/apt/lists/*
 
-# --- STEP 3: CESM ---
+# --- CESM ---
 ENV CESMROOT=/workspace/CESM
 WORKDIR /workspace
 RUN git clone https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b workshop_2025 && \
     cd ${CESMROOT} && ./bin/git-fleximod update
 
-# --- STEP 4: CROCODASH ENV ---
+# --- CROCODASH ENV ---
 COPY CrocoDash/ /workspace/CrocoDash/
 RUN printf "Metadata-Version: 2.1\nName: rm6\nVersion: 0.1.0\n" > /workspace/CrocoDash/CrocoDash/rm6/PKG-INFO
 RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
@@ -77,12 +78,12 @@ RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkg
     conda env create -f /workspace/CrocoDash/environment.yml -y
 
 
-# --- STEP 5: GIT CONFIG ---
+# --- GIT CONFIG ---
 RUN git config --global user.email "crotainer@crocodile-cesm.org" && \
     git config --global user.name "Crotainer" && \
     git config --global init.defaultBranch main
 
-# --- STEP 6: ENV VARS ---
+# --- ENV VARS ---
 ENV NETCDF_PATH=/usr \
     PNETCDF_PATH=/usr \
     CC=mpicc \
@@ -96,19 +97,18 @@ ENV NETCDF_PATH=/usr \
     # Use /usr/lib directly because your symlinks in Step 1 handle the arch logic!
     LDFLAGS="-L/usr/lib -lnetcdf -lnetcdff -lpnetcdf -lblas -llapack" \
     PATH=$CONDA_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
-
-RUN ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1) && \
-    echo "export ESMFMKFILE=${ESMFMKFILE}" >> /etc/environment && \
-    echo "export ESMFMKFILE=${ESMFMKFILE}" >> ~/.bashrc
-
-ENV OMPI_ALLOW_RUN_AS_ROOT=1 \
+    OMPI_ALLOW_RUN_AS_ROOT=1 \
     OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
     # Vader mechanism often fails in virtualized environments like Podman/Docker on Mac
     OMPI_MCA_btl_vader_single_copy_mechanism=none \
     # Force OpenMPI to use basic TCP communication to avoid "No such device" errors
     OMPI_MCA_btl=self,tcp
 
-# --- STEP 7: RUN SCRIPT --
+RUN ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1) && \
+    echo "export ESMFMKFILE=${ESMFMKFILE}" >> /etc/environment && \
+    echo "export ESMFMKFILE=${ESMFMKFILE}" >> ~/.bashrc 
+
+#  Copy Scripts 
 COPY inside_container_create_case.py /workspace/inside_container_create_case.py
 COPY run_case.sh /workspace/run_case.sh
 RUN chmod +x /workspace/run_case.sh
@@ -118,4 +118,6 @@ RUN mkdir -p /glade
 RUN mkdir -p /workspace/bundle
 RUN mkdir -p /root/cesm/inputdata
 RUN mkdir -p /root/cesm/scratch
+
+# Try conda init (doesn't work)
 RUN . /opt/conda/etc/profile.d/conda.sh

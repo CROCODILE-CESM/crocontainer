@@ -4,7 +4,6 @@ on:
     - cron: '0 6 * * 1'  # Every Monday 6am UTC
   push:
     tags: [ 'v*.*.*' ]
-    branches: ["main"]
   workflow_dispatch:
 
 env:
