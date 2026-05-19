@@ -9,7 +9,7 @@ unset NCAR_HOST
 
 # Read the case bundle and create a new case
 cd /workspace
-python inside_container_create_case.py
+python create_case_from_bundle.py
 
 # Make sure DIN_LOC_ROOT is set
 export DIN_LOC_ROOT=/root/cesm/inputdata

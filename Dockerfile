@@ -96,7 +96,7 @@ ENV NETCDF_PATH=/usr \
     USER=root \
     # Use /usr/lib directly because your symlinks in Step 1 handle the arch logic!
     LDFLAGS="-L/usr/lib -lnetcdf -lnetcdff -lpnetcdf -lblas -llapack" \
-    PATH=$CONDA_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+    PATH=$CONDA_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH \
     OMPI_ALLOW_RUN_AS_ROOT=1 \
     OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
     # Vader mechanism often fails in virtualized environments like Podman/Docker on Mac
@@ -109,8 +109,8 @@ RUN ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1) && \
     echo "export ESMFMKFILE=${ESMFMKFILE}" >> ~/.bashrc 
 
 #  Copy Scripts 
-COPY inside_container_create_case.py /workspace/inside_container_create_case.py
-COPY run_case.sh /workspace/run_case.sh
+COPY container_scripts/create_case_from_bundle.py /workspace/create_case_from_bundle.py
+COPY container_scripts/run_case.sh /workspace/run_case.sh
 RUN chmod +x /workspace/run_case.sh
 
 # Create Mount Points
