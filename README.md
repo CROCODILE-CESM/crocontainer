@@ -90,15 +90,54 @@ apptainer shell \
 
 #### On Mac (Podman)
 
+##### Prerequisites
+
+Install Podman via Homebrew (one-time):
+
+```bash
+brew install podman
+podman machine init
+podman machine start
+```
+
+##### Pull the Image
+
+```bash
+podman pull ghcr.io/crocodile-cesm/crocontainer:latest
+```
+
+This pulls the multi-arch manifest — Podman automatically selects the correct image for your Mac (arm64 for Apple Silicon, amd64 for Intel).
+
+##### Run Your Case
+
+```bash
+podman run --rm \
+  -v /path/to/your/<casename>_case_bundle:/workspace/bundle \
+  -v /path/to/inputdata:/root/cesm/inputdata \
+  -v /path/to/scratch:/root/cesm/scratch \
+  ghcr.io/crocodile-cesm/crocontainer:latest \
+  /bin/bash /workspace/run_case.sh
+```
+
+| Flag | Description |
+|---|---|
+| `--rm` | Remove the container after it exits |
+| `-v <host>:<container>` | Bind-mount a host directory into the container |
+
+##### Explore Interactively
+
+To open a shell inside the container instead of running the full script:
+
 ```bash
 podman run -it --rm \
   -v /path/to/your/<casename>_case_bundle:/workspace/bundle \
   -v /path/to/inputdata:/root/cesm/inputdata \
   -v /path/to/scratch:/root/cesm/scratch \
-  ghcr.io/crocodile-cesm/crocontainer:latest bash
+  ghcr.io/crocodile-cesm/crocontainer:latest \
+  bash
 ```
 
-Then inside the container run `/workspace/run_case.sh`.
+Then run `/workspace/run_case.sh` manually, or inspect files directly.
 
 ---
 
