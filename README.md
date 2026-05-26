@@ -39,27 +39,7 @@ crocodash bundle \
 
 This produces a `<casename>_case_bundle/` directory in your output dir.
 
-### Step 2: Pull the Container
-
-#### On Derecho (Apptainer)
-
-Pull the image as an Apptainer `.sif` file. Run this on a compute node — it takes roughly an hour.
-
-```bash
-export APPTAINER_TMPDIR=/glade/derecho/scratch/$USER/crocontainer/tmp
-export APPTAINER_CACHEDIR=/glade/derecho/scratch/$USER/crocontainer/cache
-mkdir -p $APPTAINER_TMPDIR $APPTAINER_CACHEDIR
-
-qcmd -l walltime=03:00:00 -- apptainer pull docker://ghcr.io/crocodile-cesm/crocontainer:latest-amd64
-```
-
-#### On Mac (Podman)
-
-```bash
-podman pull ghcr.io/crocodile-cesm/crocontainer:latest
-```
-
-### Step 3: Run the Container
+### Step 2: Run the Container
 
 Mount three paths into the container:
 
@@ -71,10 +51,15 @@ Mount three paths into the container:
 
 #### On Derecho (Apptainer)
 
-Apptainer images are read-only. Build a writable sandbox first (one-time setup):
+Apptainer images are read-only, so build a writable sandbox directly from the registry (one-time setup, takes ~1 hour on a compute node):
 
 ```bash
-apptainer build --sandbox crocontainer_sandbox/ docker://ghcr.io/crocodile-cesm/crocontainer:latest-amd64
+export APPTAINER_TMPDIR=/glade/derecho/scratch/$USER/crocontainer/tmp
+export APPTAINER_CACHEDIR=/glade/derecho/scratch/$USER/crocontainer/cache
+mkdir -p $APPTAINER_TMPDIR $APPTAINER_CACHEDIR
+
+qcmd -l walltime=03:00:00 -- apptainer build --sandbox crocontainer_sandbox/ \
+  docker://ghcr.io/crocodile-cesm/crocontainer:latest-amd64
 ```
 
 Then run your case:
