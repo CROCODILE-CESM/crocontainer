@@ -16,8 +16,8 @@
 1. All the packages necessary to run the CESM and a conda environment to run CrocoDash. To run the CESM, make sure the CrocoDash environment is not activated
 2. A CrocoDash environment at /workspace/CrocoDash
 3. A CESM checkout at /workspace/CESM
-4. A script at /workspace/inside_container_create_case.py that works in the CrocoDash environment to take a bundle at /workspace/bundle to an active CESM case
-5. a script at /workspace/run_case.sh that goes through all steps in the process from running the inside_container_create_case.py script to running the CESM case
+4. A script at /workspace/create_case_from_bundle.py that works in the CrocoDash environment to take a bundle at /workspace/bundle to an active CESM case
+5. a script at /workspace/run_case.sh that goes through all steps in the process from running the create_case_from_bundle.py script to running the CESM case
 
 ## Other Files in the Repo
 1. A "small_test_case.ipynb" to generate a very small test case
@@ -44,7 +44,7 @@ See below for useful commands
 Packages an existing CESM case into a bundle for use inside the container.
 
 ```bash
-crocodash read \
+crocodash bundle \
   --caseroot /glade/u/home/manishrv/croc_cases/vcg.xml.4 \
   --output-dir /glade/derecho/scratch/manishrv/crocontainer/bundles \
   --cesmroot /glade/u/home/manishrv/work/installs/CROCESM_workshop_2025 \
@@ -155,5 +155,5 @@ cd /workspace/case
 
 # Run the creation script
 cd /workspace
-python inside_container_create_case.py
+python create_case_from_bundle.py
 ```
