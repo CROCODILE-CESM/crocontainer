@@ -1,123 +1,83 @@
-# Crocontainer (CrocoDash Container)
+# Crocontainer
 
-## Concepts
+Crocontainer is a pre-built container image that lets you run a [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash)-configured CESM regional ocean case anywhere — on your laptop or on an HPC system like Derecho — without installing CESM, ESMF, or MPI yourself.
 
-- **Podman**: Docker-like, writable layers by default. Good for local/Mac use.
-- **Apptainer**: HPC-focused, read-only by default. Used on Derecho.
-- **Bundle**: A directory containing all files needed to recreate a CESM case.
-- **Sandbox**: An unpacked, writable version of an Apptainer `.sif` image.
+The workflow is:
+1. **Create and configure** a regional ocean case with CrocoDash on Derecho.
+2. **Bundle** it with `crocodash bundle` — this packages everything the container needs.
+3. **Run** the container with your bundle mounted — it rebuilds and executes the case inside.
 
-## Directions for use:
-1. Build the container using podman/docker with available mount points for CESM InputData, the CrocoDash case, and a scratch directory.
-2. Publsh to ghcr.io
-3. Use the container with those three mount points (See commands for example)
+---
 
-## What's in the container?
-1. All the packages necessary to run the CESM and a conda environment to run CrocoDash. To run the CESM, make sure the CrocoDash environment is not activated
-2. A CrocoDash environment at /workspace/CrocoDash
-3. A CESM checkout at /workspace/CESM
-4. A script at /workspace/create_case_from_bundle.py that works in the CrocoDash environment to take a bundle at /workspace/bundle to an active CESM case
-5. a script at /workspace/run_case.sh that goes through all steps in the process from running the create_case_from_bundle.py script to running the CESM case
+## User Guide
 
-## Other Files in the Repo
-1. A "small_test_case.ipynb" to generate a very small test case
-2. A "build.yml" that builds the Dockerfile in amd & arch and publishes to ghcr.io every week.
-3. Dockerfile
+### Prerequisites
 
-## Dockerfile
-1. Builds ESMF from scratch
-2. Installs Conda 
-3. Creates the CrocoDash environment
-4. Checks out the CESM
-5. Copies the necessary scripts
-6. Probably takes 30-40 minutes to run the first time (depending on platform)
+- A working CrocoDash installation (`conda activate CrocoDash`) on the system where you created your case.
+- Your CESM case already set up and configured via CrocoDash.
 
+### Step 1: Bundle Your Case
 
-
-See below for useful commands
---------------------------------
-
-
-
-## Bundle Creation (on Derecho, outside container)
-
-Packages an existing CESM case into a bundle for use inside the container.
+Run this on the system where your case lives (e.g., Derecho), outside the container:
 
 ```bash
 crocodash bundle \
-  --caseroot /glade/u/home/manishrv/croc_cases/vcg.xml.4 \
-  --output-dir /glade/derecho/scratch/manishrv/crocontainer/bundles \
-  --cesmroot /glade/u/home/manishrv/work/installs/CROCESM_workshop_2025 \
-  --machine derecho \
-  --project ncgd0011
+  --caseroot /path/to/your/cesm/case \
+  --output-dir /path/to/output/bundles \
+  --cesmroot /path/to/cesm/source \
+  --machine <machine-name> \
+  --project <project-code>
 ```
 
----
+| Flag | Description |
+|---|---|
+| `--caseroot` | Path to your existing CESM case directory |
+| `--output-dir` | Directory where the bundle will be written |
+| `--cesmroot` | Path to your CESM source checkout |
+| `--machine` | CIME machine name (e.g., `derecho`, `ubuntu-latest`) |
+| `--project` | HPC project/account code used for the case |
 
-## Build Container Images
+This produces a `<casename>_case_bundle/` directory in your output dir.
+
+### Step 2: Pull the Container
+
+#### On Derecho (Apptainer)
+
+Pull the image as an Apptainer `.sif` file. Run this on a compute node — it takes roughly an hour.
 
 ```bash
-# Build for local use (Mac)
-podman build -t crocontainer:latest .
-
-# Build for Linux/Derecho (amd64 architecture)
-podman build --platform linux/amd64 -t crocontainer:amd64 .
-podman tag crocontainer:amd64 ghcr.io/crocodile-cesm/crocontainer:amd64
-podman push ghcr.io/crocodile-cesm/crocontainer:amd64
-
-# Pull from GitHub registry to Apptainer .sif (run on a compute node, takes ~1hr)
-export APPTAINER_TMPDIR=/glade/derecho/scratch/manishrv/crocontainer/tmp
-export APPTAINER_CACHEDIR=/glade/derecho/scratch/manishrv/crocontainer/cache
+export APPTAINER_TMPDIR=/glade/derecho/scratch/$USER/crocontainer/tmp
+export APPTAINER_CACHEDIR=/glade/derecho/scratch/$USER/crocontainer/cache
 mkdir -p $APPTAINER_TMPDIR $APPTAINER_CACHEDIR
-qcmd -l walltime=03:00:00 -- apptainer pull docker://ghcr.io/crocodile-cesm/crocontainer:amd64
+
+qcmd -l walltime=03:00:00 -- apptainer pull docker://ghcr.io/crocodile-cesm/crocontainer:latest-amd64
 ```
 
----
-
-## Running on Mac (Podman)
+#### On Mac (Podman)
 
 ```bash
-# Fire and forget
-podman run --rm \
-  -v ~/my_data:/workspace/inputdata \
-  -v ~/my_cases:/workspace/cases \
-  crocontainer:latest
-
-# Interactive debugging with bundle
-podman run -it --rm \
-  -v /Users/manishrv/crocontainer/panama-crocontainer_case_bundle:/workspace/bundle \
-  --name crodebug \
-  crocontainer:latest bash
+podman pull ghcr.io/crocodile-cesm/crocontainer:latest
 ```
 
----
+### Step 3: Run the Container
 
-## Running on Derecho (Apptainer)
+Mount three paths into the container:
 
-Apptainer `.sif` images are read-only, so build a writable sandbox first. This only needs to be done once.
+| Mount target (inside container) | What to bind |
+|---|---|
+| `/workspace/bundle` | Your `<casename>_case_bundle/` directory from Step 1 |
+| `/root/cesm/inputdata` | CESM input data directory |
+| `/root/cesm/scratch` | A scratch directory for case output |
 
-### Step 1: Build sandbox
+#### On Derecho (Apptainer)
+
+Apptainer images are read-only. Build a writable sandbox first (one-time setup):
 
 ```bash
-# From a .sif file
-apptainer build --sandbox workspace_sandbox/ crocontainer_amd64.sif
-
-# Or directly from the registry
-apptainer build --sandbox workspace_sandbox/ docker://ghcr.io/crocodile-cesm/crocontainer:amd64
+apptainer build --sandbox crocontainer_sandbox/ docker://ghcr.io/crocodile-cesm/crocontainer:latest-amd64
 ```
 
-### Step 2: Shell into sandbox
-
-```bash
-apptainer shell \
-  --writable \
-  --bind /glade/campaign/cesm/cesmdata/inputdata:/root/cesm/inputdata \
-  --bind /glade/derecho/scratch/manishrv:/root/cesm/scratch \
-  --bind /glade/derecho/scratch/manishrv/crocontainer/bundles/vcg.xml.4_case_bundle:/workspace/bundle \
-  workspace_sandbox/
-```
-
-### Step 3: Run the case script
+Then run your case:
 
 ```bash
 apptainer exec \
@@ -126,34 +86,100 @@ apptainer exec \
   --env OMPI_FC=gfortran \
   --env OMPI_CXX=g++ \
   --bind /glade/campaign/cesm/cesmdata/inputdata:/root/cesm/inputdata \
-  --bind /glade/derecho/scratch/manishrv:/root/cesm/scratch \
-  --bind /glade/derecho/scratch/manishrv/crocontainer/bundles/vcg.xml.4_case_bundle:/workspace/bundle \
-  workspace_sandbox/ \
+  --bind /glade/derecho/scratch/$USER:/root/cesm/scratch \
+  --bind /path/to/your/<casename>_case_bundle:/workspace/bundle \
+  crocontainer_sandbox/ \
   /bin/bash /workspace/run_case.sh
 ```
 
-### Step 4: Inside the container
+To explore interactively instead of running the full script:
 
 ```bash
-# Activate conda
-source /opt/conda/etc/profile.d/conda.sh
-conda activate CrocoDash
-unset NCAR_HOST
-
-# Set environment variables
-export DIN_LOC_ROOT=/root/cesm/inputdata
-export ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1)
-export OMPI_CC=gcc
-export OMPI_FC=gfortran
-export OMPI_CXX=g++
-
-# Configure and run the case
-cd /workspace/case
-./xmlchange NTASKS=1
-./case.setup --reset
-./xmlchange DIN_LOC_ROOT=/root/cesm/inputdata
-
-# Run the creation script
-cd /workspace
-python create_case_from_bundle.py
+apptainer shell \
+  --writable \
+  --bind /glade/campaign/cesm/cesmdata/inputdata:/root/cesm/inputdata \
+  --bind /glade/derecho/scratch/$USER:/root/cesm/scratch \
+  --bind /path/to/your/<casename>_case_bundle:/workspace/bundle \
+  crocontainer_sandbox/
 ```
+
+#### On Mac (Podman)
+
+```bash
+podman run -it --rm \
+  -v /path/to/your/<casename>_case_bundle:/workspace/bundle \
+  -v /path/to/inputdata:/root/cesm/inputdata \
+  -v /path/to/scratch:/root/cesm/scratch \
+  ghcr.io/crocodile-cesm/crocontainer:latest bash
+```
+
+Then inside the container run `/workspace/run_case.sh`.
+
+---
+
+## Developer Guide
+
+### What's Inside the Container
+
+| Path | Contents |
+|---|---|
+| `/workspace/CESM` | Full CESM checkout (branch `workshop_2025`) |
+| `/workspace/CrocoDash` | CrocoDash installation + conda environment named `CrocoDash` |
+| `/workspace/bundle` | Mount point for your case bundle |
+| `/root/cesm/inputdata` | Mount point for CESM input data |
+| `/root/cesm/scratch` | Mount point for scratch/output |
+| `/workspace/create_case_from_bundle.py` | Reconstructs the CESM case from the bundle using CrocoDash |
+| `/workspace/run_case.sh` | Orchestrates the full flow: fork bundle → build case → submit |
+
+CESM must be run with the `CrocoDash` conda environment **deactivated**. `run_case.sh` handles this automatically.
+
+### Key Concepts
+
+| Term | Meaning |
+|---|---|
+| **Podman** | Docker-compatible container runtime. Writable layers by default. Best for local/Mac use. |
+| **Apptainer** | HPC-focused container runtime. Images are read-only `.sif` files by default. Used on Derecho. |
+| **Sandbox** | An unpacked, writable directory version of an Apptainer `.sif` image. Required for CESM since it writes to its own install tree. |
+| **Bundle** | A directory produced by `crocodash bundle` containing all config, namelists, and metadata needed to recreate a CESM case. |
+
+### Dev Environment
+
+To develop or test scripts against the in-repo CrocoDash submodule locally:
+
+```bash
+conda env create -f environment.yml
+conda activate Crocontainer
+```
+
+### Building the Container
+
+```bash
+# Local build (Mac, native architecture)
+podman build -t crocontainer:latest .
+
+# Cross-compile for Linux/amd64 (for Derecho)
+podman build --platform linux/amd64 -t crocontainer:amd64 .
+
+# Tag and push to GitHub Container Registry
+podman tag crocontainer:amd64 ghcr.io/crocodile-cesm/crocontainer:amd64
+podman push ghcr.io/crocodile-cesm/crocontainer:amd64
+```
+
+The first build takes 30–40 minutes (ESMF is compiled from source).
+
+### Dockerfile Overview
+
+The Dockerfile:
+1. Installs system compilers, MPI (OpenMPI), NetCDF/HDF5, and Python
+2. Builds ESMF v8.9.1 from source
+3. Installs Miniconda and creates the `CrocoDash` conda environment
+4. Clones CESM and runs `git-fleximod update`
+5. Copies `create_case_from_bundle.py` and `run_case.sh` into `/workspace`
+
+### CI/CD
+
+The GitHub Actions workflow (`.github/workflows/build.yml`) builds and pushes multi-arch images automatically:
+- **Trigger**: every Monday at 6am UTC, on version tags (`v*.*.*`), or manually via `workflow_dispatch`
+- **Architectures**: `linux/amd64` and `linux/arm64` (via QEMU emulation)
+- **Registry**: `ghcr.io/crocodile-cesm/crocontainer`
+- **Tags**: `latest-amd64`, `latest-arm64`, per-commit `sha-<hash>-<arch>`, and a merged `latest` multi-arch manifest
