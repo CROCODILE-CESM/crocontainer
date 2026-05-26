@@ -38,12 +38,49 @@ export OMPI_CXX=g++
 # Ensure NCAR_HOST
 unset NCAR_HOST
 
+# Limit JRA55 files to only the years needed by this run
+YR_START=$(./xmlquery DATM_YR_START --value)
+YR_END=$(./xmlquery DATM_YR_END --value)
+YR_PREV=$((YR_START - 1))
+BASE="/root/cesm/inputdata/ocn/jra55/v1.3_noleap/JRA.v1.3"
+
+cat >> user_nl_datm_streams << EOF
+CORE_IAF_JRA.PREC:year_first = ${YR_PREV}
+CORE_IAF_JRA.PREC:year_last = ${YR_END}
+CORE_IAF_JRA.PREC:year_align = ${YR_PREV}
+CORE_IAF_JRA.PREC:datafiles = ${BASE}.prec.TL319.${YR_PREV}.171019.nc,${BASE}.prec.TL319.${YR_END}.171019.nc
+CORE_IAF_JRA.LWDN:year_first = ${YR_PREV}
+CORE_IAF_JRA.LWDN:year_last = ${YR_END}
+CORE_IAF_JRA.LWDN:year_align = ${YR_PREV}
+CORE_IAF_JRA.LWDN:datafiles = ${BASE}.lwdn.TL319.${YR_PREV}.171019.nc,${BASE}.lwdn.TL319.${YR_END}.171019.nc
+CORE_IAF_JRA.SWDN:year_first = ${YR_PREV}
+CORE_IAF_JRA.SWDN:year_last = ${YR_END}
+CORE_IAF_JRA.SWDN:year_align = ${YR_PREV}
+CORE_IAF_JRA.SWDN:datafiles = ${BASE}.swdn.TL319.${YR_PREV}.171019.nc,${BASE}.swdn.TL319.${YR_END}.171019.nc
+CORE_IAF_JRA.Q_10:year_first = ${YR_PREV}
+CORE_IAF_JRA.Q_10:year_last = ${YR_END}
+CORE_IAF_JRA.Q_10:year_align = ${YR_PREV}
+CORE_IAF_JRA.Q_10:datafiles = ${BASE}.q_10.TL319.${YR_PREV}.171019.nc,${BASE}.q_10.TL319.${YR_END}.171019.nc
+CORE_IAF_JRA.SLP_:year_first = ${YR_PREV}
+CORE_IAF_JRA.SLP_:year_last = ${YR_END}
+CORE_IAF_JRA.SLP_:year_align = ${YR_PREV}
+CORE_IAF_JRA.SLP_:datafiles = ${BASE}.slp.TL319.${YR_PREV}.171019.nc,${BASE}.slp.TL319.${YR_END}.171019.nc
+CORE_IAF_JRA.T_10:year_first = ${YR_PREV}
+CORE_IAF_JRA.T_10:year_last = ${YR_END}
+CORE_IAF_JRA.T_10:year_align = ${YR_PREV}
+CORE_IAF_JRA.T_10:datafiles = ${BASE}.t_10.TL319.${YR_PREV}.171019.nc,${BASE}.t_10.TL319.${YR_END}.171019.nc
+CORE_IAF_JRA.U_10:year_first = ${YR_PREV}
+CORE_IAF_JRA.U_10:year_last = ${YR_END}
+CORE_IAF_JRA.U_10:year_align = ${YR_PREV}
+CORE_IAF_JRA.U_10:datafiles = ${BASE}.u_10.TL319.${YR_PREV}.171019.nc,${BASE}.u_10.TL319.${YR_END}.171019.nc
+CORE_IAF_JRA.V_10:year_first = ${YR_PREV}
+CORE_IAF_JRA.V_10:year_last = ${YR_END}
+CORE_IAF_JRA.V_10:year_align = ${YR_PREV}
+CORE_IAF_JRA.V_10:datafiles = ${BASE}.v_10.TL319.${YR_PREV}.171019.nc,${BASE}.v_10.TL319.${YR_END}.171019.nc
+EOF
+
 # Build
 ./case.build
-
-# Make sure datm is aligned (not necessary but kinda nice)
-cp CaseDocs/datm.streams.xml .
-sed -i 's/<year_align>1<\/year_align>/<year_align>1958<\/year_align>/g' datm.streams.xml
 
 # Submit
 ./case.submit --no-batch

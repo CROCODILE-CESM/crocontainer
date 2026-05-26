@@ -139,6 +139,20 @@ podman run -it --rm \
 
 Then run `/workspace/run_case.sh` manually, or inspect files directly.
 
+### Limiting DATM Forcing Downloads
+
+By default, CESM's DATM component will try to download the full JRA55 dataset across all years — this can be many hundreds of GB. To limit downloads to only the years your run actually needs, add a `user_nl_datm_streams` file to your case directory. Each entry restricts one stream to a specific year range and file list:
+
+```
+CORE_IAF_JRA.PREC:year_first = 2019
+CORE_IAF_JRA.PREC:year_last = 2021
+CORE_IAF_JRA.PREC:datafiles = /path/to/JRA.v1.3.prec.TL319.2019.nc,/path/to/JRA.v1.3.prec.TL319.2021.nc
+```
+
+Because this is a `user_nl` file, it is captured by `crocodash bundle` and carries over automatically when someone forks your bundle — there's nothing extra to do when sharing.
+
+**For JRA cases, `run_case.sh` does this automatically.** It reads `DATM_YR_START` and `DATM_YR_END` from the case XML and writes a `user_nl_datm_streams` file restricting all eight JRA55 streams (precipitation, longwave, shortwave, humidity, sea-level pressure, temperature, and U/V winds) to only the needed years.
+
 ---
 
 ## Developer Guide
