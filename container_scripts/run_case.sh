@@ -24,6 +24,9 @@ cd /workspace/case
 ./xmlchange NTASKS=1
 ./case.setup --reset
 
+# We're also going to turn off the archiver
+./xmlchange DOUT_S=False
+
 # Ensure DIN_LOC_ROOT
 ./xmlchange DIN_LOC_ROOT=/root/cesm/inputdata
 
