@@ -90,7 +90,7 @@ apptainer shell \
 
 #### On Mac (Podman)
 
-##### Prerequisites
+##### Prerequisites 
 
 Install Podman via Homebrew (one-time):
 
