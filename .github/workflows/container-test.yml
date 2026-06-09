@@ -16,6 +16,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      # Linux: podman is pre-installed on ubuntu-latest runners.
       - name: Set up Podman (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -23,25 +24,24 @@ jobs:
           podman machine init --cpus 2 --memory 6144 --disk-size 60
           podman machine start
 
-      # Linux: podman is pre-installed on ubuntu-latest runners.
-      # Windows: docker is pre-installed via Docker Desktop service.
-      - name: Set container CLI
-        shell: bash
+      - name: Set up Podman (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
         run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "CONTAINER_CLI=docker" >> $GITHUB_ENV
-          else
-            echo "CONTAINER_CLI=podman" >> $GITHUB_ENV
-          fi
+          winget install --id RedHat.Podman -e --silent --accept-package-agreements --accept-source-agreements
+          $podmanPath = "C:\Program Files\RedHat\Podman"
+          echo "$podmanPath" | Out-File -FilePath $env:GITHUB_PATH -Append
+          & "$podmanPath\podman.exe" machine init --cpus 2 --memory 6144
+          & "$podmanPath\podman.exe" machine start
 
       - name: Pull container image
         shell: bash
-        run: $CONTAINER_CLI pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest
+        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest
 
       - name: Verify container environment
         shell: bash
         run: |
-          $CONTAINER_CLI run --rm --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest \
+          podman run --rm --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest \
             bash -c "
               source /opt/conda/etc/profile.d/conda.sh && \
               conda activate CrocoDash && \
@@ -63,6 +63,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Linux: podman is pre-installed on ubuntu-latest runners.
       - name: Set up Podman (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -70,15 +71,23 @@ jobs:
           podman machine init --cpus 2 --memory 6144 --disk-size 60
           podman machine start
 
-      # Git Bash on Windows gives backslash paths; container volume mounts need forward slashes.
-      - name: Set container CLI and workspace path
+      - name: Set up Podman (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          winget install --id RedHat.Podman -e --silent --accept-package-agreements --accept-source-agreements
+          $podmanPath = "C:\Program Files\RedHat\Podman"
+          echo "$podmanPath" | Out-File -FilePath $env:GITHUB_PATH -Append
+          & "$podmanPath\podman.exe" machine init --cpus 2 --memory 6144
+          & "$podmanPath\podman.exe" machine start
+
+      # Git Bash on Windows gives /c/... paths; Podman on Windows needs Windows-native paths for volume mounts.
+      - name: Set workspace path
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "CONTAINER_CLI=docker" >> $GITHUB_ENV
-            echo "CONTAINER_WS=$(cygpath -u "$GITHUB_WORKSPACE")" >> $GITHUB_ENV
+            echo "CONTAINER_WS=$(cygpath -w "$GITHUB_WORKSPACE")" >> $GITHUB_ENV
           else
-            echo "CONTAINER_CLI=podman" >> $GITHUB_ENV
             echo "CONTAINER_WS=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           fi
 
@@ -96,7 +105,7 @@ jobs:
 
       - name: Pull container image
         shell: bash
-        run: $CONTAINER_CLI pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest
+        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest
 
       - name: Create scratch directory
         shell: bash
@@ -105,7 +114,7 @@ jobs:
       - name: Run NYF case end-to-end
         shell: bash
         run: |
-          $CONTAINER_CLI run --rm --platform linux/amd64 \
+          podman run --rm --platform linux/amd64 \
             -v "$CONTAINER_WS/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "$CONTAINER_WS/cesm_scratch:/root/cesm/scratch" \
             -v "$CONTAINER_WS/container_scripts/case_setup.py:/workspace/case_setup.py" \
