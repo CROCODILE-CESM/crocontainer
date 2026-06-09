@@ -36,12 +36,12 @@ jobs:
 
       - name: Pull container image
         shell: bash
-        run: $CONTAINER_CLI pull ghcr.io/crocodile-cesm/crocontainer:latest
+        run: $CONTAINER_CLI pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest
 
       - name: Verify container environment
         shell: bash
         run: |
-          $CONTAINER_CLI run --rm ghcr.io/crocodile-cesm/crocontainer:latest \
+          $CONTAINER_CLI run --rm --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest \
             bash -c "
               source /opt/conda/etc/profile.d/conda.sh && \
               conda activate CrocoDash && \
@@ -96,7 +96,7 @@ jobs:
 
       - name: Pull container image
         shell: bash
-        run: $CONTAINER_CLI pull ghcr.io/crocodile-cesm/crocontainer:latest
+        run: $CONTAINER_CLI pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest
 
       - name: Create scratch directory
         shell: bash
@@ -105,7 +105,7 @@ jobs:
       - name: Run NYF case end-to-end
         shell: bash
         run: |
-          $CONTAINER_CLI run --rm \
+          $CONTAINER_CLI run --rm --platform linux/amd64 \
             -v "$CONTAINER_WS/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "$CONTAINER_WS/cesm_scratch:/root/cesm/scratch" \
             -v "$CONTAINER_WS/container_scripts/case_setup.py:/workspace/case_setup.py" \
