@@ -16,10 +16,17 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      # Linux: podman is pre-installed. macOS/Windows: use docker/setup-docker-action.
-      - name: Set up Docker (macOS / Windows)
-        if: runner.os != 'Linux'
+      # Linux: podman is pre-installed.
+      # macOS: docker/setup-docker-action starts a colima-backed daemon.
+      # Windows: Docker Engine is pre-installed on runners but the service is stopped.
+      - name: Set up Docker (macOS)
+        if: runner.os == 'macOS'
         uses: docker/setup-docker-action@v3
+
+      - name: Start Docker service (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: Start-Service docker
 
       - name: Set container CLI
         shell: bash
@@ -59,10 +66,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Linux: podman is pre-installed. macOS/Windows: use docker/setup-docker-action.
-      - name: Set up Docker (macOS / Windows)
-        if: runner.os != 'Linux'
+      # Linux: podman is pre-installed.
+      # macOS: docker/setup-docker-action starts a colima-backed daemon.
+      # Windows: Docker Engine is pre-installed on runners but the service is stopped.
+      - name: Set up Docker (macOS)
+        if: runner.os == 'macOS'
         uses: docker/setup-docker-action@v3
+
+      - name: Start Docker service (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: Start-Service docker
 
       - name: Set container CLI and workspace path
         shell: bash
