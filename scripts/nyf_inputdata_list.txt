@@ -1,0 +1,22 @@
+# NYF (Normal Year Forcing) CESM inputdata file list
+# Generated from Buildconf/*.input_data_list for a minimal regional MOM6 NYF case.
+# All paths are relative to https://svn-ccsm-inputdata.cgd.ucar.edu/trunk/inputdata/
+# Used by download_nyf_inputdata.sh
+
+# Atmosphere mesh and correction factors
+share/meshes/T62_040121_ESMFmesh.nc
+share/meshes/T62_040121_ESMFmesh_c20190714.nc
+share/meshes/fv0.9x1.25_141008_polemod_ESMFmesh.nc
+atm/datm7/CORE2/COREv2.correction_factors.T62.121007.nc
+
+# NYF forcing files (GISS radiation, GFDL surface fluxes, NCEP reanalysis)
+atm/datm7/NYF/nyf.giss.T62.051007.nc
+atm/datm7/NYF/nyf.gxgxs.T62.051007.nc
+atm/datm7/NYF/nyf.ncep.T62.050923.nc
+
+# Aerosol and nitrogen deposition (required by DATM/CPL even in ocean-only runs)
+atm/cam/chem/trop_mozart_aero/aero/aerosoldep_WACCM.ensmean_monthly_hist_1849-2015_0.9x1.25_CMIP6_c180926.nc
+lnd/clm2/ndepdata/fndep_clm_WACCM6_CMIP6piControl001_y21-50avg_1850monthly_0.95x1.25_c180802.nc
+
+# Ocean
+ocn/mom/grid_indpt/cfc_atm_20230310.nc

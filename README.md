@@ -9,6 +9,59 @@ The workflow is:
 
 ---
 
+## NYF Quick Start
+
+NYF (Normal Year Forcing) runs use a small, fixed set of CESM inputdata — 10 files totalling ~6.5 GB. By pre-downloading these once, the container skips all SVN downloads at runtime and starts immediately.
+
+### Step 1: Download the inputdata
+
+The file list is versioned in `scripts/nyf_inputdata_list.txt`. The download script reads it and fetches each file from the CESM SVN HTTP server, preserving the directory tree expected by CESM under `DIN_LOC_ROOT`.
+
+```bash
+bash scripts/download_nyf_inputdata.sh ./cesm_nyf_inputdata
+```
+
+**Download options:**
+
+| Option | Effect |
+|---|---|
+| First positional arg | Output directory (default: `./cesm_nyf_inputdata`) |
+| Second positional arg (number) | Number of parallel transfers (default: 4) |
+| `--from-glade <user@host>` | rsync from GLADE campaign storage instead of SVN — faster if you have GLADE access |
+
+**Speed tips:**
+- Install [`aria2c`](https://aria2.github.io/) (`brew install aria2` on Mac) — the script automatically uses it when available, splitting each large file into 4 concurrent chunks. Falls back to `wget` otherwise.
+- If you have a GLADE account, `--from-glade` pulls directly from `/glade/campaign/cesm/cesmdata/inputdata/` via rsync, bypassing the SVN server entirely:
+
+```bash
+bash scripts/download_nyf_inputdata.sh ./cesm_nyf_inputdata --from-glade <you>@derecho.hpc.ucar.edu
+```
+
+The script is **idempotent** — re-running skips any files already present, so it is safe to resume an interrupted download.
+
+### Step 2: Bundle your NYF case and run the container
+
+Mount the pre-downloaded directory as `/root/cesm/inputdata`. CESM finds all files at the expected paths under `DIN_LOC_ROOT` and skips SVN downloads entirely.
+
+```bash
+# Apptainer (Derecho)
+apptainer exec --writable \
+  --bind ./cesm_nyf_inputdata:/root/cesm/inputdata \
+  --bind /glade/derecho/scratch/$USER:/root/cesm/scratch \
+  --bind /path/to/<casename>_case_bundle:/workspace/bundle \
+  crocontainer_sandbox/ /bin/bash /workspace/run_case.sh
+
+# Podman (Mac/local)
+podman run --rm \
+  -v ./cesm_nyf_inputdata:/root/cesm/inputdata \
+  -v /path/to/scratch:/root/cesm/scratch \
+  -v /path/to/<casename>_case_bundle:/workspace/bundle \
+  ghcr.io/crocodile-cesm/crocontainer:latest \
+  /bin/bash /workspace/run_case.sh
+```
+
+---
+
 ## User Guide
 
 ### Prerequisites

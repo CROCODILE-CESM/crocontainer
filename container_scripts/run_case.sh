@@ -41,7 +41,9 @@ export OMPI_CXX=g++
 # Ensure NCAR_HOST
 unset NCAR_HOST
 
-# Limit JRA55 files to only the years needed by this run
+# Limit JRA55 files to only the years needed by this run (skip for NYF)
+DATM_MODE=$(./xmlquery DATM_MODE --value 2>/dev/null || echo "")
+if [[ "$DATM_MODE" == *"JRA"* ]]; then
 YR_START=$(./xmlquery DATM_YR_START --value)
 YR_END=$(./xmlquery DATM_YR_END --value)
 YR_PREV=$((YR_START - 1))
@@ -81,6 +83,7 @@ CORE_IAF_JRA.V_10:year_last = ${YR_END}
 CORE_IAF_JRA.V_10:year_align = ${YR_PREV}
 CORE_IAF_JRA.V_10:datafiles = ${BASE}.v_10.TL319.${YR_PREV}.171019.nc,${BASE}.v_10.TL319.${YR_END}.171019.nc
 EOF
+fi  # end JRA55 block
 
 # Build
 ./case.build
