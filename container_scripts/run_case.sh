@@ -1,55 +1,47 @@
 #!/bin/bash
+set -euo pipefail
 
-# Activate the Conda Environmen
 source /opt/conda/etc/profile.d/conda.sh
 conda activate CrocoDash
 
-# Unset a CIME Variable
+export USER=root
+export DIN_LOC_ROOT=/root/cesm/inputdata
 unset NCAR_HOST
 
-# Read the case bundle and create a new case
-cd /workspace
-python create_case_from_bundle.py
+# Case setup: use case_setup.py if mounted, otherwise reconstruct from bundle.
+# Mount your setup script as /workspace/case_setup.py to use direct mode:
+#   docker run -v /path/to/your_setup.py:/workspace/case_setup.py ...
+if [[ -f /workspace/case_setup.py ]]; then
+    python /workspace/case_setup.py
+else
+    cd /workspace
+    python create_case_from_bundle.py
+fi
 
-# Make sure DIN_LOC_ROOT is set
-export DIN_LOC_ROOT=/root/cesm/inputdata
-
-# Finish CrocoDash Part
 conda deactivate
 
-# Go to case
 cd /workspace/case
 
-# For case.submit --no-batch we use 1 task
 ./xmlchange NTASKS=1
 ./case.setup --reset
-
-# We're also going to turn off the archiver
 ./xmlchange DOUT_S=False
-
-# Ensure DIN_LOC_ROOT
 ./xmlchange DIN_LOC_ROOT=/root/cesm/inputdata
 
-# Ensure ESMFMKFile
 export ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1)
-
-# Ensure GNU
 export OMPI_CC=gcc
 export OMPI_FC=gfortran
 export OMPI_CXX=g++
-
-# Ensure NCAR_HOST
 unset NCAR_HOST
 
 # Limit JRA55 files to only the years needed by this run (skip for NYF)
 DATM_MODE=$(./xmlquery DATM_MODE --value 2>/dev/null || echo "")
 if [[ "$DATM_MODE" == *"JRA"* ]]; then
-YR_START=$(./xmlquery DATM_YR_START --value)
-YR_END=$(./xmlquery DATM_YR_END --value)
-YR_PREV=$((YR_START - 1))
-BASE="/root/cesm/inputdata/ocn/jra55/v1.3_noleap/JRA.v1.3"
+    YR_START=$(./xmlquery DATM_YR_START --value)
+    YR_END=$(./xmlquery DATM_YR_END --value)
+    YR_PREV=$((YR_START - 1))
+    BASE="/root/cesm/inputdata/ocn/jra55/v1.3_noleap/JRA.v1.3"
 
-cat >> user_nl_datm_streams << EOF
+    cat >> user_nl_datm_streams << EOF
 CORE_IAF_JRA.PREC:year_first = ${YR_PREV}
 CORE_IAF_JRA.PREC:year_last = ${YR_END}
 CORE_IAF_JRA.PREC:year_align = ${YR_PREV}
@@ -83,10 +75,7 @@ CORE_IAF_JRA.V_10:year_last = ${YR_END}
 CORE_IAF_JRA.V_10:year_align = ${YR_PREV}
 CORE_IAF_JRA.V_10:datafiles = ${BASE}.v_10.TL319.${YR_PREV}.171019.nc,${BASE}.v_10.TL319.${YR_END}.171019.nc
 EOF
-fi  # end JRA55 block
+fi
 
-# Build
 ./case.build
-
-# Submit
 ./case.submit --no-batch

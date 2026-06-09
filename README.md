@@ -2,10 +2,11 @@
 
 Crocontainer is a pre-built container image that lets you run a [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash)-configured CESM regional ocean case anywhere — on your laptop or on an HPC system like Derecho — without installing CESM, ESMF, or MPI yourself.
 
-The workflow is:
-1. **Create and configure** a regional ocean case with CrocoDash on Derecho.
-2. **Bundle** it with `crocodash bundle` — this packages everything the container needs.
-3. **Run** the container with your bundle mounted — it rebuilds and executes the case inside.
+The primary workflow is:
+1. **Download & Edit** `container_scripts/case_setup.py` to configure your regional ocean domain.
+2. **Run** the container with your setup script mounted — it configures, builds, and executes the case inside.
+
+If you need features from a CrocoDash version newer than what's in the container image, see [Bundle Mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container) instead.
 
 ---
 
@@ -39,37 +40,175 @@ bash scripts/download_nyf_inputdata.sh ./cesm_nyf_inputdata --from-glade <you>@d
 
 The script is **idempotent** — re-running skips any files already present, so it is safe to resume an interrupted download.
 
-### Step 2: Bundle your NYF case and run the container
+### Step 2: Run your case
 
-Mount the pre-downloaded directory as `/root/cesm/inputdata`. CESM finds all files at the expected paths under `DIN_LOC_ROOT` and skips SVN downloads entirely.
+Clone this repository (to get `case_setup.py` and helper scripts), create a scratch directory, and run:
 
 ```bash
-# Apptainer (Derecho)
-apptainer exec --writable \
-  --bind ./cesm_nyf_inputdata:/root/cesm/inputdata \
-  --bind /glade/derecho/scratch/$USER:/root/cesm/scratch \
-  --bind /path/to/<casename>_case_bundle:/workspace/bundle \
-  crocontainer_sandbox/ /bin/bash /workspace/run_case.sh
+mkdir -p cesm_scratch
 
-# Podman (Mac/local)
-podman run --rm \
+# Linux / macOS
+docker run --rm \
   -v ./cesm_nyf_inputdata:/root/cesm/inputdata \
-  -v /path/to/scratch:/root/cesm/scratch \
-  -v /path/to/<casename>_case_bundle:/workspace/bundle \
+  -v ./cesm_scratch:/root/cesm/scratch \
+  -v ./container_scripts/case_setup.py:/workspace/case_setup.py \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
+
+```powershell
+# Windows (PowerShell)
+docker run --rm `
+  -v C:\path\to\cesm_nyf_inputdata:/root/cesm/inputdata `
+  -v C:\path\to\cesm_scratch:/root/cesm/scratch `
+  -v C:\path\to\crocontainer\container_scripts\case_setup.py:/workspace/case_setup.py `
+  ghcr.io/crocodile-cesm/crocontainer:latest `
+  /bin/bash /workspace/run_case.sh
+```
+
+Edit `container_scripts/case_setup.py` to change the domain, resolution, or compset before running.
 
 ---
 
 ## User Guide
 
-### Prerequisites
+### Setup Script Mode (default)
+
+The container includes a full CESM checkout at `/workspace/CESM` and the `CrocoDash` conda environment. You configure your case by mounting a Python setup script at `/workspace/case_setup.py` — `run_case.sh` detects it automatically and uses it; if no script is mounted it falls back to [bundle mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container).
+
+The script `container_scripts/case_setup.py` is a ready-to-use template — it is also used by the CI workflow to validate the container on every platform, so it stays current with the container environment. Edit it to configure:
+
+- **Domain**: `xstart`, `ystart`, `lenx`, `leny`
+- **Resolution**: `resolution` in `Grid`
+- **Vertical grid**: `nk`, `depth` in `VGrid.uniform`
+- **Compset**: `compset` in `Case`
+
+Then run the container with your edited script mounted as `/workspace/case_setup.py`:
+
+```bash
+# Linux
+docker run --rm \
+  -v /path/to/cesm_inputdata:/root/cesm/inputdata \
+  -v /path/to/scratch:/root/cesm/scratch \
+  -v /path/to/your_setup.py:/workspace/case_setup.py \
+  ghcr.io/crocodile-cesm/crocontainer:latest \
+  /bin/bash /workspace/run_case.sh
+```
+
+#### On Mac (Podman)
+
+Podman is the recommended container runtime on macOS.
+
+##### Prerequisites
+
+Install Podman via Homebrew (one-time):
+
+```bash
+brew install podman
+podman machine init
+podman machine start
+```
+
+##### Pull the Image
+
+```bash
+podman pull ghcr.io/crocodile-cesm/crocontainer:latest
+```
+
+This pulls the multi-arch manifest — Podman automatically selects the correct image for your Mac (arm64 for Apple Silicon, amd64 for Intel).
+
+##### Run Your Case
+
+```bash
+podman run --rm \
+  -v /path/to/cesm_inputdata:/root/cesm/inputdata \
+  -v /path/to/scratch:/root/cesm/scratch \
+  -v /path/to/your_setup.py:/workspace/case_setup.py \
+  ghcr.io/crocodile-cesm/crocontainer:latest \
+  /bin/bash /workspace/run_case.sh
+```
+
+##### Explore Interactively
+
+To open a shell inside the container instead of running the full script:
+
+```bash
+podman run -it --rm \
+  -v /path/to/cesm_inputdata:/root/cesm/inputdata \
+  -v /path/to/scratch:/root/cesm/scratch \
+  ghcr.io/crocodile-cesm/crocontainer:latest \
+  bash
+```
+
+Then run your setup script manually (`python /path/to/your_setup.py`) or invoke `/workspace/run_case.sh` directly.
+
+#### On Windows (Docker Desktop)
+
+CrocoDash does not run natively on Windows. The container is how Windows users access CrocoDash and CESM — it provides a complete Linux environment with CrocoDash and a full CESM checkout pre-installed, accessible through Docker Desktop.
+
+##### Prerequisites
+
+Download and install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/). During setup, ensure the **WSL2** backend is selected (the default). Switch to **Linux containers** mode if prompted (right-click the Docker Desktop tray icon → "Switch to Linux containers").
+
+##### Pull the Image
+
+```powershell
+docker pull ghcr.io/crocodile-cesm/crocontainer:latest
+```
+
+##### Run Your Case
+
+Edit `container_scripts\case_setup.py`, then mount it as `/workspace/case_setup.py`:
+
+```powershell
+docker run --rm `
+  -v C:\path\to\cesm_inputdata:/root/cesm/inputdata `
+  -v C:\path\to\scratch:/root/cesm/scratch `
+  -v C:\path\to\crocontainer\container_scripts\case_setup.py:/workspace/case_setup.py `
+  ghcr.io/crocodile-cesm/crocontainer:latest `
+  /bin/bash /workspace/run_case.sh
+```
+
+##### Explore Interactively
+
+To open a shell inside the container:
+
+```powershell
+docker run -it --rm `
+  -v C:\path\to\cesm_inputdata:/root/cesm/inputdata `
+  -v C:\path\to\scratch:/root/cesm/scratch `
+  -v C:\path\to\your\work:/workspace/work `
+  ghcr.io/crocodile-cesm/crocontainer:latest `
+  bash
+```
+
+Inside the container, activate the CrocoDash environment and run your setup script:
+
+```bash
+source /opt/conda/etc/profile.d/conda.sh
+conda activate CrocoDash
+python /workspace/work/your_setup.py
+```
+
+The backtick (`` ` ``) is the PowerShell line-continuation character; replace it with `\` if running from Git Bash or WSL.
+
+---
+
+### Bundle Mode: When Your CrocoDash Is Newer Than the Container
+
+Use this when either of the following applies:
+
+- **You need a newer CrocoDash**: your case requires features from a version of CrocoDash on Derecho that hasn't been baked into the container image yet.
+- **You want a verified configuration**: you've already run the full CrocoDash workflow somewhere and confirmed it works. Bundling captures that exact configuration, so the container reconstructs it directly rather than re-running a setup script — avoiding any errors you might otherwise encounter writing or debugging `case_setup.py` from scratch.
+
+Bundle mode is not available on Windows — `crocodash bundle` requires a CrocoDash installation, which does not run natively on Windows.
+
+#### Prerequisites
 
 - A working CrocoDash installation (`conda activate CrocoDash`) on the system where you created your case.
 - Your CESM case already set up and configured via CrocoDash.
 
-### Step 1: Bundle Your Case
+#### Step 1: Bundle Your Case
 
 Run this on the system where your case lives (e.g., Derecho), outside the container:
 
@@ -92,7 +231,7 @@ crocodash bundle \
 
 This produces a `<casename>_case_bundle/` directory in your output dir.
 
-### Step 2: Run the Container
+#### Step 2: Run the Container
 
 Mount three paths into the container:
 
@@ -102,7 +241,7 @@ Mount three paths into the container:
 | `/root/cesm/inputdata` | CESM input data directory |
 | `/root/cesm/scratch` | A scratch directory for case output |
 
-#### On Derecho (Apptainer)
+##### On Derecho (Apptainer)
 
 Apptainer images are read-only, so build a writable sandbox directly from the registry (one-time setup, takes ~1 hour on a compute node):
 
@@ -141,27 +280,7 @@ apptainer shell \
   crocontainer_sandbox/
 ```
 
-#### On Mac (Podman)
-
-##### Prerequisites
-
-Install Podman via Homebrew (one-time):
-
-```bash
-brew install podman
-podman machine init
-podman machine start
-```
-
-##### Pull the Image
-
-```bash
-podman pull ghcr.io/crocodile-cesm/crocontainer:latest
-```
-
-This pulls the multi-arch manifest — Podman automatically selects the correct image for your Mac (arm64 for Apple Silicon, amd64 for Intel).
-
-##### Run Your Case
+##### On Mac (Podman)
 
 ```bash
 podman run --rm \
@@ -177,20 +296,7 @@ podman run --rm \
 | `--rm` | Remove the container after it exits |
 | `-v <host>:<container>` | Bind-mount a host directory into the container |
 
-##### Explore Interactively
-
-To open a shell inside the container instead of running the full script:
-
-```bash
-podman run -it --rm \
-  -v /path/to/your/<casename>_case_bundle:/workspace/bundle \
-  -v /path/to/inputdata:/root/cesm/inputdata \
-  -v /path/to/scratch:/root/cesm/scratch \
-  ghcr.io/crocodile-cesm/crocontainer:latest \
-  bash
-```
-
-Then run `/workspace/run_case.sh` manually, or inspect files directly.
+---
 
 ### Limiting DATM Forcing Downloads
 
@@ -220,7 +326,7 @@ Because this is a `user_nl` file, it is captured by `crocodash bundle` and carri
 | `/root/cesm/inputdata` | Mount point for CESM input data |
 | `/root/cesm/scratch` | Mount point for scratch/output |
 | `/workspace/create_case_from_bundle.py` | Reconstructs the CESM case from the bundle using CrocoDash |
-| `/workspace/run_case.sh` | Orchestrates the full flow: fork bundle → build case → submit |
+| `/workspace/run_case.sh` | Orchestrates the full flow: setup/fork → build case → submit |
 
 CESM must be run with the `CrocoDash` conda environment **deactivated**. `run_case.sh` handles this automatically.
 
