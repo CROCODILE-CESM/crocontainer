@@ -47,7 +47,7 @@ Clone this repository (to get `case_setup.py` and helper scripts), create a scra
 ```bash
 mkdir -p cesm_scratch
 
-# Linux / macOS
+# Linux / macOS / Windows (WSL2)
 podman run --rm \
   -v ./cesm_nyf_inputdata:/root/cesm/inputdata \
   -v ./cesm_scratch:/root/cesm/scratch \
@@ -56,15 +56,7 @@ podman run --rm \
   /bin/bash /workspace/run_case.sh
 ```
 
-```powershell
-# Windows (PowerShell)
-docker run --rm `
-  -v C:\path\to\cesm_nyf_inputdata:/root/cesm/inputdata `
-  -v C:\path\to\cesm_scratch:/root/cesm/scratch `
-  -v C:\path\to\crocontainer\container_scripts\case_setup.py:/workspace/case_setup.py `
-  ghcr.io/crocodile-cesm/crocontainer:latest `
-  /bin/bash /workspace/run_case.sh
-```
+> **Windows users:** run this from inside a WSL2 Ubuntu terminal, not from PowerShell. See [On Windows (WSL2)](#on-windows-wsl2) for setup.
 
 Edit `container_scripts/case_setup.py` to change the domain, resolution, or compset before running.
 
@@ -129,55 +121,74 @@ podman run -it --rm \
 
 Then run your setup script manually (`python /path/to/your_setup.py`) or invoke `/workspace/run_case.sh` directly.
 
-#### On Windows (Docker Desktop)
+#### On Windows (WSL2)
 
-CrocoDash does not run natively on Windows. The container is how Windows users access CrocoDash and CESM — it provides a complete Linux environment with CrocoDash and a full CESM checkout pre-installed, accessible through Docker Desktop.
+CESM and CrocoDash are Linux-only. On Windows, use **WSL2** (Windows Subsystem for Linux) to get a full native Ubuntu environment — then follow the Linux instructions above exactly. There is nothing Windows-specific to learn; once you're inside WSL2 you're on Linux.
 
-##### Prerequisites
+##### Install WSL2
 
-Download and install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/). During setup, ensure the **WSL2** backend is selected (the default). Switch to **Linux containers** mode if prompted (right-click the Docker Desktop tray icon → "Switch to Linux containers").
-
-##### Pull the Image
+Open **PowerShell as Administrator** and run:
 
 ```powershell
-docker pull ghcr.io/crocodile-cesm/crocontainer:latest
+wsl --install
 ```
 
-##### Run Your Case
+This installs Ubuntu by default. Restart when prompted, then open the **Ubuntu** app from the Start menu to complete first-time setup (create a username and password).
 
-Edit `container_scripts\case_setup.py`, then mount it as `/workspace/case_setup.py`:
+##### Install Podman inside WSL2
 
-```powershell
-docker run --rm `
-  -v C:\path\to\cesm_inputdata:/root/cesm/inputdata `
-  -v C:\path\to\scratch:/root/cesm/scratch `
-  -v C:\path\to\crocontainer\container_scripts\case_setup.py:/workspace/case_setup.py `
-  ghcr.io/crocodile-cesm/crocontainer:latest `
+In your Ubuntu terminal:
+
+```bash
+sudo apt update && sudo apt install -y podman
+```
+
+##### Clone the Repo and Run Your Case
+
+Work directly in your WSL2 home directory — it's faster and avoids path translation issues:
+
+```bash
+git clone https://github.com/CROCODILE-CESM/crocontainer ~/crocontainer
+cd ~/crocontainer
+bash scripts/download_nyf_inputdata.sh ~/cesm_nyf_inputdata
+mkdir -p ~/cesm_scratch
+
+podman run --rm \
+  -v ~/cesm_nyf_inputdata:/root/cesm/inputdata \
+  -v ~/cesm_scratch:/root/cesm/scratch \
+  -v ~/crocontainer/container_scripts/case_setup.py:/workspace/case_setup.py \
+  ghcr.io/crocodile-cesm/crocontainer:latest \
+  /bin/bash /workspace/run_case.sh
+```
+
+If you prefer to keep files on your Windows drive, they are accessible under `/mnt/c/Users/<YourName>/...` inside WSL2:
+
+```bash
+podman run --rm \
+  -v /mnt/c/Users/<YourName>/cesm_nyf_inputdata:/root/cesm/inputdata \
+  -v /mnt/c/Users/<YourName>/cesm_scratch:/root/cesm/scratch \
+  -v /mnt/c/Users/<YourName>/crocontainer/container_scripts/case_setup.py:/workspace/case_setup.py \
+  ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
 
 ##### Explore Interactively
 
-To open a shell inside the container:
-
-```powershell
-docker run -it --rm `
-  -v C:\path\to\cesm_inputdata:/root/cesm/inputdata `
-  -v C:\path\to\scratch:/root/cesm/scratch `
-  -v C:\path\to\your\work:/workspace/work `
-  ghcr.io/crocodile-cesm/crocontainer:latest `
+```bash
+podman run -it --rm \
+  -v ~/cesm_nyf_inputdata:/root/cesm/inputdata \
+  -v ~/cesm_scratch:/root/cesm/scratch \
+  ghcr.io/crocodile-cesm/crocontainer:latest \
   bash
 ```
 
-Inside the container, activate the CrocoDash environment and run your setup script:
+Inside the container:
 
 ```bash
 source /opt/conda/etc/profile.d/conda.sh
 conda activate CrocoDash
-python /workspace/work/your_setup.py
+python /workspace/case_setup.py
 ```
-
-The backtick (`` ` ``) is the PowerShell line-continuation character; replace it with `\` if running from Git Bash or WSL.
 
 ---
 
@@ -188,7 +199,7 @@ Use this when either of the following applies:
 - **You need a newer CrocoDash**: your case requires features from a version of CrocoDash on Derecho that hasn't been baked into the container image yet.
 - **You want a verified configuration**: you've already run the full CrocoDash workflow somewhere and confirmed it works. Bundling captures that exact configuration, so the container reconstructs it directly rather than re-running a setup script — avoiding any errors you might otherwise encounter writing or debugging `case_setup.py` from scratch.
 
-Bundle mode is not available on Windows — `crocodash bundle` requires a CrocoDash installation, which does not run natively on Windows.
+Bundle mode requires a working CrocoDash installation. Windows users should run `crocodash bundle` from inside their WSL2 Ubuntu environment (see [On Windows (WSL2)](#on-windows-wsl2)).
 
 #### Prerequisites
 
@@ -321,7 +332,8 @@ CESM must be run with the `CrocoDash` conda environment **deactivated**. `run_ca
 
 | Term | Meaning |
 |---|---|
-| **Podman** | Docker-compatible container runtime. Writable layers by default. Best for local/Mac use. |
+| **Podman** | Docker-compatible container runtime. Writable layers by default. Recommended for Linux, macOS, and Windows (via WSL2). |
+| **WSL2** | Windows Subsystem for Linux 2 — a full Linux kernel running inside Windows. Windows users run all CrocoDash/CESM work here. |
 | **Apptainer** | HPC-focused container runtime. Images are read-only `.sif` files by default. Used on Derecho. |
 | **Sandbox** | An unpacked, writable directory version of an Apptainer `.sif` image. Required for CESM since it writes to its own install tree. |
 | **Bundle** | A directory produced by `crocodash bundle` containing all config, namelists, and metadata needed to recreate a CESM case. |
@@ -362,8 +374,15 @@ The Dockerfile:
 
 ### CI/CD
 
-The GitHub Actions workflow (`.github/workflows/build.yml`) builds and pushes multi-arch images automatically:
+Two GitHub Actions workflows handle CI/CD:
+
+**Build** (`.github/workflows/build.yml`): builds and pushes multi-arch images automatically.
 - **Trigger**: every Monday at 6am UTC, on version tags (`v*.*.*`), or manually via `workflow_dispatch`
 - **Architectures**: `linux/amd64` and `linux/arm64` (via QEMU emulation)
 - **Registry**: `ghcr.io/crocodile-cesm/crocontainer`
 - **Tags**: `latest-amd64`, `latest-arm64`, per-commit `sha-<hash>-<arch>`, and a merged `latest` multi-arch manifest
+
+**Container Tests** (`.github/workflows/container-test.yml`): validates the image on every push and weekly.
+- **Platforms**: `ubuntu-latest` (covers Linux and Windows-via-WSL2 users) and `macos-latest`
+- **Smoke test**: pulls the image and verifies CrocoDash imports and CESM files are present
+- **NYF end-to-end** (scheduled/manual only): runs a full NYF case inside the container
