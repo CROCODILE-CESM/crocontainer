@@ -48,7 +48,7 @@ Clone this repository (to get `case_setup.py` and helper scripts), create a scra
 mkdir -p cesm_scratch
 
 # Linux / macOS
-docker run --rm \
+podman run --rm \
   -v ./cesm_nyf_inputdata:/root/cesm/inputdata \
   -v ./cesm_scratch:/root/cesm/scratch \
   -v ./container_scripts/case_setup.py:/workspace/case_setup.py \
@@ -85,39 +85,28 @@ The script `container_scripts/case_setup.py` is a ready-to-use template — it i
 
 Then run the container with your edited script mounted as `/workspace/case_setup.py`:
 
-```bash
-# Linux
-docker run --rm \
-  -v /path/to/cesm_inputdata:/root/cesm/inputdata \
-  -v /path/to/scratch:/root/cesm/scratch \
-  -v /path/to/your_setup.py:/workspace/case_setup.py \
-  ghcr.io/crocodile-cesm/crocontainer:latest \
-  /bin/bash /workspace/run_case.sh
-```
+#### On Linux / macOS (Podman)
 
-#### On Mac (Podman)
+Podman is the recommended container runtime on Linux and macOS.
 
-Podman is the recommended container runtime on macOS.
-
-##### Prerequisites
-
-Install Podman via Homebrew (one-time):
+**Install** (if not already present):
 
 ```bash
+# macOS
 brew install podman
 podman machine init
 podman machine start
+
+# Linux (Fedora/RHEL)
+sudo dnf install podman
+
+# Linux (Debian/Ubuntu)
+sudo apt install podman
 ```
 
-##### Pull the Image
+On macOS, `podman machine init && podman machine start` creates and starts a lightweight Linux VM. `podman pull` automatically selects the correct image for your Mac (arm64 for Apple Silicon, amd64 for Intel).
 
-```bash
-podman pull ghcr.io/crocodile-cesm/crocontainer:latest
-```
-
-This pulls the multi-arch manifest — Podman automatically selects the correct image for your Mac (arm64 for Apple Silicon, amd64 for Intel).
-
-##### Run Your Case
+**Run your case:**
 
 ```bash
 podman run --rm \
@@ -128,9 +117,7 @@ podman run --rm \
   /bin/bash /workspace/run_case.sh
 ```
 
-##### Explore Interactively
-
-To open a shell inside the container instead of running the full script:
+**Explore interactively:**
 
 ```bash
 podman run -it --rm \
@@ -280,7 +267,7 @@ apptainer shell \
   crocontainer_sandbox/
 ```
 
-##### On Mac (Podman)
+##### On Linux / Mac (Podman)
 
 ```bash
 podman run --rm \
