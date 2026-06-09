@@ -17,11 +17,12 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       # Linux: podman is pre-installed on ubuntu-latest runners.
+      # vfkit (default macOS VM backend) fails on GitHub runners; use QEMU instead.
       - name: Set up Podman (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install podman
-          podman machine init --cpus 2 --memory 6144 --disk-size 60
+          brew install podman qemu
+          podman machine init --provider=qemu --cpus 2 --memory 6144 --disk-size 60
           podman machine start
 
       - name: Set up Podman (Windows)
@@ -64,11 +65,12 @@ jobs:
         uses: actions/checkout@v4
 
       # Linux: podman is pre-installed on ubuntu-latest runners.
+      # vfkit (default macOS VM backend) fails on GitHub runners; use QEMU instead.
       - name: Set up Podman (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install podman
-          podman machine init --cpus 2 --memory 6144 --disk-size 60
+          brew install podman qemu
+          podman machine init --provider=qemu --cpus 2 --memory 6144 --disk-size 60
           podman machine start
 
       - name: Set up Podman (Windows)
