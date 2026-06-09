@@ -14,25 +14,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        # Windows users are directed to WSL2, which is a native Ubuntu environment —
-        # ubuntu-latest already covers that path. Running a Windows runner here would
-        # test Docker Desktop / Podman-machine, which is not the supported workflow.
+        os: [ubuntu-latest]
+        # macOS and Windows are excluded: GitHub macOS runners don't support nested
+        # virtualization (HVF/QEMU both fail), so no VM-based approach can run Linux
+        # containers there. Windows users run via WSL2 = Ubuntu, already covered here.
+        # macOS users follow the Homebrew Podman docs, which work on real Macs.
     steps:
-      # Linux: podman pre-installed (also represents Windows-via-WSL2 users).
-      # macOS: docker/setup-docker-action v5 installs Colima for Linux container support.
-      - name: Set up Docker (macOS)
-        if: runner.os == 'macOS'
-        uses: docker/setup-docker-action@v5
-
+      # podman is pre-installed on ubuntu-latest.
       - name: Set container CLI
         shell: bash
-        run: |
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            echo "CONTAINER_CLI=docker" >> $GITHUB_ENV
-          else
-            echo "CONTAINER_CLI=podman" >> $GITHUB_ENV
-          fi
+        run: echo "CONTAINER_CLI=podman" >> $GITHUB_ENV
 
       - name: Pull container image
         shell: bash
@@ -58,26 +49,17 @@ jobs:
     timeout-minutes: 120
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        # Windows via WSL2 is equivalent to ubuntu-latest; no separate Windows runner needed.
+        os: [ubuntu-latest]
+        # macOS/Windows excluded for the same reasons as smoke-test above.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker (macOS)
-        if: runner.os == 'macOS'
-        uses: docker/setup-docker-action@v5
-
       - name: Set container CLI and workspace path
         shell: bash
         run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            echo "CONTAINER_CLI=podman" >> $GITHUB_ENV
-            echo "CONTAINER_WS=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          else
-            echo "CONTAINER_CLI=docker" >> $GITHUB_ENV
-            echo "CONTAINER_WS=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          fi
+          echo "CONTAINER_CLI=podman" >> $GITHUB_ENV
+          echo "CONTAINER_WS=$GITHUB_WORKSPACE" >> $GITHUB_ENV
 
       - name: Cache NYF inputdata
         uses: actions/cache@v4
