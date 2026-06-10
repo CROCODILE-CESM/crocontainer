@@ -1,5 +1,7 @@
 # Crocontainer
 
+[![CESM runs in container](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/container-test.yml/badge.svg)](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/container-test.yml)
+
 Crocontainer is a pre-built container image that lets you run a [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash)-configured CESM regional ocean case anywhere — on your laptop or on an HPC system like Derecho — without installing CESM, ESMF, or MPI yourself.
 
 The primary workflow is:

@@ -1,4 +1,4 @@
-name: Container Tests
+name: CESM runs in container
 
 on:
   push:
@@ -94,10 +94,6 @@ jobs:
             -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_case.sh
-
-      - name: Fix artifact permissions
-        if: always()
-        run: sudo chown -R runner:runner ${{ github.workspace }}/cesm_scratch || true
 
       - name: Upload CESM logs and output
         if: always()
