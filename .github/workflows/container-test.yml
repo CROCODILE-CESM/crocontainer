@@ -10,29 +10,22 @@ on:
 
 jobs:
   smoke-test:
-    name: Smoke test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        # macOS and Windows are excluded: GitHub macOS runners don't support nested
-        # virtualization (HVF/QEMU both fail), so no VM-based approach can run Linux
-        # containers there. Windows users run via WSL2 = Ubuntu, already covered here.
-        # macOS users follow the Homebrew Podman docs, which work on real Macs.
+    name: Smoke test
+    runs-on: ubuntu-latest
     steps:
-      # podman is pre-installed on ubuntu-latest.
-      - name: Set container CLI
-        shell: bash
-        run: echo "CONTAINER_CLI=podman" >> $GITHUB_ENV
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull container image
-        shell: bash
-        run: $CONTAINER_CLI pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
+        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
 
       - name: Verify container environment
-        shell: bash
         run: |
-          $CONTAINER_CLI run --rm --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+          podman run --rm --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             bash -c "
               source /opt/conda/etc/profile.d/conda.sh && \
               conda activate CrocoDash && \
@@ -43,23 +36,21 @@ jobs:
             "
 
   nyf-run-test:
-    name: NYF end-to-end (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: NYF end-to-end
+    runs-on: ubuntu-latest
+    needs: smoke-test
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     timeout-minutes: 120
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        # macOS/Windows excluded for the same reasons as smoke-test above.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set container CLI and workspace path
-        shell: bash
-        run: |
-          echo "CONTAINER_CLI=podman" >> $GITHUB_ENV
-          echo "CONTAINER_WS=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache NYF inputdata
         uses: actions/cache@v4
@@ -70,24 +61,28 @@ jobs:
 
       - name: Download NYF inputdata
         if: steps.nyf-cache.outputs.cache-hit != 'true'
-        shell: bash
         run: bash scripts/download_nyf_inputdata.sh ./cesm_nyf_inputdata 8
 
       - name: Pull container image
-        shell: bash
-        run: $CONTAINER_CLI pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
+        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
 
       - name: Create scratch directory
-        shell: bash
         run: mkdir -p cesm_scratch
 
       - name: Run NYF case end-to-end
-        shell: bash
         run: |
-          $CONTAINER_CLI run --rm --platform linux/amd64 \
-            -v "$CONTAINER_WS/cesm_nyf_inputdata:/root/cesm/inputdata" \
-            -v "$CONTAINER_WS/cesm_scratch:/root/cesm/scratch" \
-            -v "$CONTAINER_WS/container_scripts/case_setup.py:/workspace/case_setup.py" \
-            -v "$CONTAINER_WS/container_scripts/run_case.sh:/workspace/run_case.sh" \
+          podman run --rm --platform linux/amd64 \
+            -v "${{ github.workspace }}/cesm_nyf_inputdata:/root/cesm/inputdata" \
+            -v "${{ github.workspace }}/cesm_scratch:/root/cesm/scratch" \
+            -v "${{ github.workspace }}/container_scripts/case_setup.py:/workspace/case_setup.py" \
+            -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_case.sh
+
+      - name: Upload CESM logs and output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cesm-nyf-${{ github.run_id }}
+          path: ${{ github.workspace }}/cesm_scratch/
+          if-no-files-found: warn
