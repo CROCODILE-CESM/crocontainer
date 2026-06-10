@@ -79,6 +79,10 @@ jobs:
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_case.sh
 
+      - name: Fix artifact permissions
+        if: always()
+        run: sudo chmod -R a+r ${{ github.workspace }}/cesm_scratch || true
+
       - name: Upload CESM logs and output
         if: always()
         uses: actions/upload-artifact@v4
