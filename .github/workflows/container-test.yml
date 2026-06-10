@@ -104,5 +104,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cesm-nyf-${{ github.run_id }}
-          path: ${{ github.workspace }}/cesm_scratch/
+          path: ${{ github.workspace }}/cesm_scratch/case/run
           if-no-files-found: warn
