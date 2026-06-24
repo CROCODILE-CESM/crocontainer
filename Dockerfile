@@ -108,10 +108,21 @@ RUN ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1) && \
     echo "export ESMFMKFILE=${ESMFMKFILE}" >> /etc/environment && \
     echo "export ESMFMKFILE=${ESMFMKFILE}" >> ~/.bashrc 
 
-#  Copy Scripts 
+# Pin cmake < 4.0 in the conda base env so it takes precedence over the system
+# cmake (ubuntu:latest ships cmake >= 4.0 which breaks the CDEPS cmake build —
+# FindMPI fails when project() has not yet been called, which is the case in
+# CDEPS when building as part of CESM).
+RUN /opt/conda/bin/pip install "cmake<4" --quiet
+
+#  Copy Scripts
 COPY container_scripts/create_case_from_bundle.py /workspace/create_case_from_bundle.py
 COPY container_scripts/run_case.sh /workspace/run_case.sh
 RUN chmod +x /workspace/run_case.sh
+
+# cmake macros for the ubuntu-latest CIME machine — injected into each case
+# by run_case.sh after case.setup to ensure container MPI is used.
+RUN mkdir -p /workspace/cmake_macros
+COPY container_scripts/cmake_macros/gnu_ubuntu-latest.cmake /workspace/cmake_macros/gnu_ubuntu-latest.cmake
 
 # Create Mount Points
 RUN mkdir -p /glade

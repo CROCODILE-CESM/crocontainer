@@ -27,6 +27,11 @@ cd /workspace/case
 ./xmlchange DOUT_S=False
 ./xmlchange DIN_LOC_ROOT=/root/cesm/inputdata
 
+# Inject compiler macros that hardcode the container's MPI paths.
+# Prevents HPC MPI libraries (e.g. from a bind-mounted /glade on Derecho)
+# from leaking into the cmake build via PATH.
+cp /workspace/cmake_macros/gnu_ubuntu-latest.cmake cmake_macros/
+
 export ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1)
 export OMPI_CC=gcc
 export OMPI_FC=gfortran
