@@ -9,7 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: crocodile-cesm/crocontainer
-  CESM_BRANCH: workshop_2025
+  CESM_BRANCH: full_regional_cesm
 
 jobs:
   build-and-push:
@@ -64,6 +64,8 @@ jobs:
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
+          build-args: |
+                CESM_BRANCH=${{ env.CESM_BRANCH }}
           tags: |
                 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.arch.outputs.suffix }}
                 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-${{ steps.arch.outputs.suffix }}
