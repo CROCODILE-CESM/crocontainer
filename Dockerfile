@@ -65,7 +65,7 @@ RUN apt-get update && apt-get install -y curl && \
     rm -rf /var/lib/apt/lists/*
 
 # --- CESM ---
-ARG CESM_BRANCH=full_regional_cesm
+ARG CESM_BRANCH=full_regional_cesm_alpha09d
 ENV CESMROOT=/workspace/CESM
 WORKDIR /workspace
 RUN git clone https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b ${CESM_BRANCH} && \

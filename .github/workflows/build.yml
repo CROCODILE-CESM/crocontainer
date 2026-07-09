@@ -9,7 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: crocodile-cesm/crocontainer
-  CESM_BRANCH: full_regional_cesm
+  CESM_BRANCH: full_regional_cesm_alpha09d
 
 jobs:
   build-and-push:

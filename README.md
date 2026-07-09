@@ -320,7 +320,7 @@ Because this is a `user_nl` file, it is captured by `crocodash bundle` and carri
 
 | Path | Contents |
 |---|---|
-| `/workspace/CESM` | Full CESM checkout (branch `full_regional_cesm`) |
+| `/workspace/CESM` | Full CESM checkout (branch `full_regional_cesm_alpha09d`) |
 | `/workspace/CrocoDash` | CrocoDash installation + conda environment named `CrocoDash` |
 | `/workspace/bundle` | Mount point for your case bundle |
 | `/root/cesm/inputdata` | Mount point for CESM input data |
