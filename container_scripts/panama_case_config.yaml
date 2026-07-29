@@ -1,0 +1,41 @@
+# Panama domain (3x3 degrees at 0.05 degrees) — matches the pre-staged
+# GEBCO bathymetry and GLORYS OBC/IC data used by the container CI so it
+# can run end-to-end without live Copernicus Marine credentials.
+#
+# Edit this file to change the domain, resolution, vertical grid, or
+# compset. See container_scripts/case_setup.py for how it's loaded.
+
+grid:
+  resolution: 0.05
+  xstart: 278.0
+  lenx: 3.0
+  ystart: 7.0
+  leny: 3.0
+  name: panama1
+
+topo:
+  min_depth: 9.5
+  source:
+    type: dataset
+    bathymetry_path: /tmp/gebco.nc
+    longitude_coordinate_name: lon
+    latitude_coordinate_name: lat
+    vertical_coordinate_name: elevation
+
+vgrid:
+  type: hyperbolic
+  nk: 75
+  ratio: 20.0
+
+case:
+  cesmroot: /workspace/CESM
+  caseroot: /workspace/case
+  inputdir: /workspace/inputdir
+  compset: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV
+  atm_grid_name: T62
+  machine: ubuntu-latest
+  project: PROJ123
+
+forcings:
+  date_range: ["2020-01-01 00:00:00", "2020-01-05 00:00:00"]
+  function_name: get_glorys_data_script_for_cli

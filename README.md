@@ -5,8 +5,8 @@
 Crocontainer is a pre-built container image that lets you run a [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash)-configured CESM regional ocean case anywhere — on your laptop or on an HPC system like Derecho — without installing CESM, ESMF, or MPI yourself.
 
 The primary workflow is:
-1. **Download & Edit** `container_scripts/case_setup.py` to configure your regional ocean domain.
-2. **Run** the container with your setup script mounted — it configures, builds, and executes the case inside.
+1. **Download & Edit** `container_scripts/panama_case_config.yaml` — a CrocoDash YAML case config — to configure your regional ocean domain.
+2. **Run** the container with the setup script and YAML config mounted — it configures, builds, and executes the case inside.
 
 If you need features from a CrocoDash version newer than what's in the container image, see [Bundle Mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container) instead.
 
@@ -44,7 +44,7 @@ The script is **idempotent** — re-running skips any files already present, so 
 
 ### Step 2: Run your case
 
-Clone this repository (to get `case_setup.py` and helper scripts), create a scratch directory, and run:
+Clone this repository (to get `case_setup.py`, `panama_case_config.yaml`, and helper scripts), create a scratch directory, and run:
 
 ```bash
 mkdir -p cesm_scratch
@@ -54,13 +54,14 @@ podman run --rm \
   -v ./cesm_nyf_inputdata:/root/cesm/inputdata \
   -v ./cesm_scratch:/root/cesm/scratch \
   -v ./container_scripts/case_setup.py:/workspace/case_setup.py \
+  -v ./container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
 
 > **Windows users:** run this from inside a WSL2 Ubuntu terminal, not from PowerShell. See [On Windows (WSL2)](#on-windows-wsl2) for setup.
 
-Edit `container_scripts/case_setup.py` to change the domain, resolution, or compset before running.
+Edit `container_scripts/panama_case_config.yaml` to change the domain, resolution, or compset before running.
 
 ---
 
@@ -68,16 +69,16 @@ Edit `container_scripts/case_setup.py` to change the domain, resolution, or comp
 
 ### Setup Script Mode (default)
 
-The container includes a full CESM checkout at `/workspace/CESM` and the `CrocoDash` conda environment. You configure your case by mounting a Python setup script at `/workspace/case_setup.py` — `run_case.sh` detects it automatically and uses it; if no script is mounted it falls back to [bundle mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container).
+The container includes a full CESM checkout at `/workspace/CESM` and the `CrocoDash` conda environment. You configure your case with a CrocoDash YAML case config mounted at `/workspace/panama_case_config.yaml`, alongside the setup script that reads it at `/workspace/case_setup.py` — `run_case.sh` detects the setup script automatically and uses it; if no script is mounted it falls back to [bundle mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container).
 
-The script `container_scripts/case_setup.py` is a ready-to-use template — it is also used by the CI workflow to validate the container on every platform, so it stays current with the container environment. Edit it to configure:
+`container_scripts/panama_case_config.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) — it is also used by the CI workflow to validate the container on every platform, so it stays current with the container environment. `container_scripts/case_setup.py` loads it, builds the case, then stages test forcing data before running the regrid — you shouldn't need to edit that file. Edit the YAML to configure:
 
-- **Domain**: `xstart`, `ystart`, `lenx`, `leny`
-- **Resolution**: `resolution` in `Grid`
-- **Vertical grid**: `nk`, `depth` in `VGrid.uniform`
-- **Compset**: `compset` in `Case`
+- **Domain**: `grid.xstart`, `grid.ystart`, `grid.lenx`, `grid.leny`
+- **Resolution**: `grid.resolution`
+- **Vertical grid**: `vgrid.nk`, `vgrid.type`
+- **Compset**: `case.compset`
 
-Then run the container with your edited script mounted as `/workspace/case_setup.py`:
+Then run the container with your edited config mounted as `/workspace/panama_case_config.yaml` (alongside the unmodified `case_setup.py`):
 
 #### On Linux / macOS (Podman)
 
@@ -106,7 +107,8 @@ On macOS, `podman machine init && podman machine start` creates and starts a lig
 podman run --rm \
   -v /path/to/cesm_inputdata:/root/cesm/inputdata \
   -v /path/to/scratch:/root/cesm/scratch \
-  -v /path/to/your_setup.py:/workspace/case_setup.py \
+  -v /path/to/case_setup.py:/workspace/case_setup.py \
+  -v /path/to/your_case_config.yaml:/workspace/panama_case_config.yaml \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
@@ -121,7 +123,7 @@ podman run -it --rm \
   bash
 ```
 
-Then run your setup script manually (`python /path/to/your_setup.py`) or invoke `/workspace/run_case.sh` directly.
+Then run your setup script manually (`python /path/to/case_setup.py`) or invoke `/workspace/run_case.sh` directly.
 
 #### On Windows (WSL2)
 
@@ -159,6 +161,7 @@ podman run --rm \
   -v ~/cesm_nyf_inputdata:/root/cesm/inputdata \
   -v ~/cesm_scratch:/root/cesm/scratch \
   -v ~/crocontainer/container_scripts/case_setup.py:/workspace/case_setup.py \
+  -v ~/crocontainer/container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
@@ -170,6 +173,7 @@ podman run --rm \
   -v /mnt/c/Users/<YourName>/cesm_nyf_inputdata:/root/cesm/inputdata \
   -v /mnt/c/Users/<YourName>/cesm_scratch:/root/cesm/scratch \
   -v /mnt/c/Users/<YourName>/crocontainer/container_scripts/case_setup.py:/workspace/case_setup.py \
+  -v /mnt/c/Users/<YourName>/crocontainer/container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
