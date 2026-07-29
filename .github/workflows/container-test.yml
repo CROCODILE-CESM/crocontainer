@@ -91,6 +91,7 @@ jobs:
             -v "${{ github.workspace }}/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "${{ github.workspace }}/cesm_scratch:/root/cesm/scratch" \
             -v "${{ github.workspace }}/container_scripts/case_setup.py:/workspace/case_setup.py" \
+            -v "${{ github.workspace }}/container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml" \
             -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_case.sh
