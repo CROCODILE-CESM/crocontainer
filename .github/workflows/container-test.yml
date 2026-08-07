@@ -40,7 +40,9 @@ jobs:
               python -c 'from CrocoDash.case import Case; print(\"CrocoDash OK\")' && \
               test -f /workspace/CESM/cime/scripts/create_newcase && echo 'CESM OK' && \
               test -f /workspace/run_case.sh && echo 'run_case.sh OK' && \
-              test -f /workspace/create_case_from_bundle.py && echo 'create_case_from_bundle.py OK'
+              test -f /workspace/panama_demo_setup.sh && echo 'panama_demo_setup.sh OK' && \
+              crocodash fork --help > /dev/null && echo 'crocodash fork OK' && \
+              crocodash create --help 2>&1 | grep -q -- '--configure-only' && echo 'crocodash create --configure-only OK'
             "
 
   nyf-run-test:
@@ -87,10 +89,15 @@ jobs:
 
       - name: Run NYF case end-to-end
         run: |
+          # No case_config.yaml/bundle mounted -- exercises the built-in
+          # Panama demo path (run_case.sh's third branch). Mount this repo's
+          # own copies of the demo script/config/run_case.sh so CI tests the
+          # current PR's versions rather than whatever was baked into the
+          # already-published image.
           podman run --rm --platform linux/amd64 \
             -v "${{ github.workspace }}/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "${{ github.workspace }}/cesm_scratch:/root/cesm/scratch" \
-            -v "${{ github.workspace }}/container_scripts/case_setup.py:/workspace/case_setup.py" \
+            -v "${{ github.workspace }}/container_scripts/panama_demo_setup.sh:/workspace/panama_demo_setup.sh" \
             -v "${{ github.workspace }}/container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml" \
             -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \

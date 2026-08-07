@@ -1,0 +1,9 @@
+# None of these are imported by CrocoDash/environment.yml's editable installs
+# (rm6, mom6_forge, visualCaseGen, ipyfilechooser, CrocoDash itself all live
+# under CrocoDash/CrocoDash/) -- excluding them shrinks the build context and
+# the copied /workspace/CrocoDash tree without affecting anything at runtime.
+CrocoDash/demos
+CrocoDash/docs
+CrocoDash/tests
+CrocoDash/.github
+CrocoDash/.git

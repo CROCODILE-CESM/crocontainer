@@ -6,7 +6,7 @@ Crocontainer is a pre-built container image that lets you run a [CrocoDash](http
 
 The primary workflow is:
 1. **Download & Edit** `container_scripts/panama_case_config.yaml` — a CrocoDash YAML case config — to configure your regional ocean domain.
-2. **Run** the container with the setup script and YAML config mounted — it configures, builds, and executes the case inside.
+2. **Run** the container with your edited YAML config mounted as `/workspace/case_config.yaml` — it builds, configures, and executes the case inside via the `crocodash` CLI. No script to write or mount.
 
 If you need features from a CrocoDash version newer than what's in the container image, see [Bundle Mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container) instead.
 
@@ -44,41 +44,44 @@ The script is **idempotent** — re-running skips any files already present, so 
 
 ### Step 2: Run your case
 
-Clone this repository (to get `case_setup.py`, `panama_case_config.yaml`, and helper scripts), create a scratch directory, and run:
+Clone this repository (to get `panama_case_config.yaml` as a starting template, and helper scripts), create a scratch directory, and run:
 
 ```bash
 mkdir -p cesm_scratch
+cp container_scripts/panama_case_config.yaml my_case_config.yaml
+# edit my_case_config.yaml for your domain (see below), then:
 
 # Linux / macOS / Windows (WSL2)
 podman run --rm \
   -v ./cesm_nyf_inputdata:/root/cesm/inputdata \
   -v ./cesm_scratch:/root/cesm/scratch \
-  -v ./container_scripts/case_setup.py:/workspace/case_setup.py \
-  -v ./container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml \
+  -v ./my_case_config.yaml:/workspace/case_config.yaml \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
 
 > **Windows users:** run this from inside a WSL2 Ubuntu terminal, not from PowerShell. See [On Windows (WSL2)](#on-windows-wsl2) for setup.
 
-Edit `container_scripts/panama_case_config.yaml` to change the domain, resolution, or compset before running.
+If you run the container with nothing mounted at all, it falls back to a built-in Panama demo case baked into the image — see [YAML Config Mode](#yaml-config-mode-default).
 
 ---
 
 ## User Guide
 
-### Setup Script Mode (default)
+### YAML Config Mode (default)
 
-The container includes a full CESM checkout at `/workspace/CESM` and the `CrocoDash` conda environment. You configure your case with a CrocoDash YAML case config mounted at `/workspace/panama_case_config.yaml`, alongside the setup script that reads it at `/workspace/case_setup.py` — `run_case.sh` detects the setup script automatically and uses it; if no script is mounted it falls back to [bundle mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container).
+The container includes a full CESM checkout at `/workspace/CESM` and the `CrocoDash` conda environment. You configure your case with a CrocoDash YAML case config mounted at `/workspace/case_config.yaml` — `run_case.sh` runs `crocodash create --config /workspace/case_config.yaml --override` directly; there's no script to write or mount. Your config's `case.caseroot`/`case.inputdir` must be `/workspace/case`/`/workspace/inputdir` to match the paths `run_case.sh` uses for the CIME build/submit steps that follow.
 
-`container_scripts/panama_case_config.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) — it is also used by the CI workflow to validate the container on every platform, so it stays current with the container environment. `container_scripts/case_setup.py` loads it, builds the case, then stages test forcing data before running the regrid — you shouldn't need to edit that file. Edit the YAML to configure:
+If neither a YAML config nor a [bundle](#bundle-mode-when-your-crocodash-is-newer-than-the-container) is mounted, `run_case.sh` falls back to a built-in Panama demo case (`panama_case_config.yaml` + `panama_demo_setup.sh`, baked into the image) that stages pre-fetched test data instead of hitting a live data-access API — useful for a quick smoke test, and what the CI workflow uses to validate the container on every platform.
+
+`container_scripts/panama_case_config.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) for your own case. Edit a copy of it to configure:
 
 - **Domain**: `grid.xstart`, `grid.ystart`, `grid.lenx`, `grid.leny`
 - **Resolution**: `grid.resolution`
 - **Vertical grid**: `vgrid.nk`, `vgrid.type`
 - **Compset**: `case.compset`
 
-Then run the container with your edited config mounted as `/workspace/panama_case_config.yaml` (alongside the unmodified `case_setup.py`):
+Then run the container with your edited config mounted as `/workspace/case_config.yaml`:
 
 #### On Linux / macOS (Podman)
 
@@ -107,8 +110,7 @@ On macOS, `podman machine init && podman machine start` creates and starts a lig
 podman run --rm \
   -v /path/to/cesm_inputdata:/root/cesm/inputdata \
   -v /path/to/scratch:/root/cesm/scratch \
-  -v /path/to/case_setup.py:/workspace/case_setup.py \
-  -v /path/to/your_case_config.yaml:/workspace/panama_case_config.yaml \
+  -v /path/to/your_case_config.yaml:/workspace/case_config.yaml \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
@@ -123,7 +125,7 @@ podman run -it --rm \
   bash
 ```
 
-Then run your setup script manually (`python /path/to/case_setup.py`) or invoke `/workspace/run_case.sh` directly.
+Then run `crocodash create --config /path/to/your_case_config.yaml --override` manually, or invoke `/workspace/run_case.sh` directly.
 
 #### On Windows (WSL2)
 
@@ -156,12 +158,13 @@ git clone https://github.com/CROCODILE-CESM/crocontainer ~/crocontainer
 cd ~/crocontainer
 bash scripts/download_nyf_inputdata.sh ~/cesm_nyf_inputdata
 mkdir -p ~/cesm_scratch
+cp container_scripts/panama_case_config.yaml my_case_config.yaml
+# edit my_case_config.yaml for your domain, then:
 
 podman run --rm \
   -v ~/cesm_nyf_inputdata:/root/cesm/inputdata \
   -v ~/cesm_scratch:/root/cesm/scratch \
-  -v ~/crocontainer/container_scripts/case_setup.py:/workspace/case_setup.py \
-  -v ~/crocontainer/container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml \
+  -v ~/crocontainer/my_case_config.yaml:/workspace/case_config.yaml \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
@@ -172,8 +175,7 @@ If you prefer to keep files on your Windows drive, they are accessible under `/m
 podman run --rm \
   -v /mnt/c/Users/<YourName>/cesm_nyf_inputdata:/root/cesm/inputdata \
   -v /mnt/c/Users/<YourName>/cesm_scratch:/root/cesm/scratch \
-  -v /mnt/c/Users/<YourName>/crocontainer/container_scripts/case_setup.py:/workspace/case_setup.py \
-  -v /mnt/c/Users/<YourName>/crocontainer/container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml \
+  -v /mnt/c/Users/<YourName>/crocontainer/my_case_config.yaml:/workspace/case_config.yaml \
   ghcr.io/crocodile-cesm/crocontainer:latest \
   /bin/bash /workspace/run_case.sh
 ```
@@ -193,7 +195,7 @@ Inside the container:
 ```bash
 source /opt/conda/etc/profile.d/conda.sh
 conda activate CrocoDash
-python /workspace/case_setup.py
+crocodash create --config /workspace/case_config.yaml --override
 ```
 
 ---
@@ -203,7 +205,7 @@ python /workspace/case_setup.py
 Use this when either of the following applies:
 
 - **You need a newer CrocoDash**: your case requires features from a version of CrocoDash on Derecho that hasn't been baked into the container image yet.
-- **You want a verified configuration**: you've already run the full CrocoDash workflow somewhere and confirmed it works. Bundling captures that exact configuration, so the container reconstructs it directly rather than re-running a setup script — avoiding any errors you might otherwise encounter writing or debugging `case_setup.py` from scratch.
+- **You want a verified configuration**: you've already run the full CrocoDash workflow somewhere and confirmed it works. Bundling captures that exact configuration, so the container reconstructs it directly rather than building a new case from a YAML config — avoiding any errors you might otherwise encounter writing or debugging a case config from scratch.
 
 Bundle mode requires a working CrocoDash installation. Windows users should run `crocodash bundle` from inside their WSL2 Ubuntu environment (see [On Windows (WSL2)](#on-windows-wsl2)).
 
@@ -326,11 +328,13 @@ Because this is a `user_nl` file, it is captured by `crocodash bundle` and carri
 |---|---|
 | `/workspace/CESM` | Full CESM checkout (branch `full_regional_cesm_alpha09d`) |
 | `/workspace/CrocoDash` | CrocoDash installation + conda environment named `CrocoDash` |
+| `/workspace/case_config.yaml` | Mount point for your own YAML case config (YAML config mode) |
 | `/workspace/bundle` | Mount point for your case bundle |
+| `/workspace/panama_case_config.yaml` | Built-in Panama demo case config, used when nothing else is mounted |
+| `/workspace/panama_demo_setup.sh` | Stages test data and builds the Panama demo case via the CLI |
 | `/root/cesm/inputdata` | Mount point for CESM input data |
 | `/root/cesm/scratch` | Mount point for scratch/output |
-| `/workspace/create_case_from_bundle.py` | Reconstructs the CESM case from the bundle using CrocoDash |
-| `/workspace/run_case.sh` | Orchestrates the full flow: setup/fork → build case → submit |
+| `/workspace/run_case.sh` | Orchestrates the full flow: create/fork/demo → build case → submit |
 
 CESM must be run with the `CrocoDash` conda environment **deactivated**. `run_case.sh` handles this automatically.
 
@@ -376,7 +380,7 @@ The Dockerfile:
 2. Builds ESMF v8.9.1 from source
 3. Installs Miniconda and creates the `CrocoDash` conda environment
 4. Clones CESM and runs `git-fleximod update`
-5. Copies `create_case_from_bundle.py` and `run_case.sh` into `/workspace`
+5. Copies `run_case.sh`, `panama_demo_setup.sh`, and `panama_case_config.yaml` into `/workspace`
 
 ### CI/CD
 

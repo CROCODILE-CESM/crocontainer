@@ -43,8 +43,10 @@ RUN mkdir -p ${ESMF_DIR} && \
     export ESMF_NETCDF_LIBPATH=/usr/lib/$(uname -m)-linux-gnu && \
     make -j$(nproc) && \
     make install && \
-    # Clean up to save space
-    make clean
+    # Clean up to save space (distclean removes build objects that plain
+    # clean leaves behind; the already-installed ESMF_INSTALL_PREFIX tree is
+    # untouched since distclean targets the build tree, not the install tree)
+    make distclean
 
 
 # --- CONDA ---
@@ -68,7 +70,7 @@ RUN apt-get update && apt-get install -y curl && \
 ARG CESM_BRANCH=full_regional_cesm_alpha09d
 ENV CESMROOT=/workspace/CESM
 WORKDIR /workspace
-RUN git clone https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b ${CESM_BRANCH} && \
+RUN git clone --depth 1 https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b ${CESM_BRANCH} && \
     cd ${CESMROOT} && ./bin/git-fleximod update
 
 # --- CROCODASH ENV ---
@@ -116,9 +118,10 @@ RUN ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1) && \
 RUN /opt/conda/bin/pip install "cmake<4" --quiet
 
 #  Copy Scripts
-COPY container_scripts/create_case_from_bundle.py /workspace/create_case_from_bundle.py
 COPY container_scripts/run_case.sh /workspace/run_case.sh
-RUN chmod +x /workspace/run_case.sh
+COPY container_scripts/panama_demo_setup.sh /workspace/panama_demo_setup.sh
+COPY container_scripts/panama_case_config.yaml /workspace/panama_case_config.yaml
+RUN chmod +x /workspace/run_case.sh /workspace/panama_demo_setup.sh
 
 # cmake macros for the ubuntu-latest CIME machine — injected into each case
 # by run_case.sh after case.setup to ensure container MPI is used.
@@ -130,6 +133,3 @@ RUN mkdir -p /glade
 RUN mkdir -p /workspace/bundle
 RUN mkdir -p /root/cesm/inputdata
 RUN mkdir -p /root/cesm/scratch
-
-# Try conda init (doesn't work)
-RUN . /opt/conda/etc/profile.d/conda.sh

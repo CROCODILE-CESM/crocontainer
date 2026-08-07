@@ -8,14 +8,30 @@ export USER=root
 export DIN_LOC_ROOT=/root/cesm/inputdata
 unset NCAR_HOST
 
-# Case setup: use case_setup.py if mounted, otherwise reconstruct from bundle.
-# Mount your setup script as /workspace/case_setup.py to use direct mode:
-#   docker run -v /path/to/your_setup.py:/workspace/case_setup.py ...
-if [[ -f /workspace/case_setup.py ]]; then
-    python /workspace/case_setup.py
+# Case setup -- three modes, checked in order:
+#   1. Mount a CrocoDash YAML case config as /workspace/case_config.yaml to
+#      build any case directly via the CLI (general-purpose mode). Its
+#      case.caseroot/inputdir must be /workspace/case and /workspace/inputdir
+#      to match the paths this script uses below.
+#        docker run -v /path/to/your_config.yaml:/workspace/case_config.yaml ...
+#   2. Mount a `crocodash bundle` output directory as /workspace/bundle to
+#      reconstruct a case shared from another machine/user.
+#   3. Neither mounted: fall back to the built-in Panama demo case (baked
+#      into the image), which stages pre-fetched test data since CI/demo
+#      environments have no live data-access credentials.
+if [[ -f /workspace/case_config.yaml ]]; then
+    crocodash create --config /workspace/case_config.yaml --override
+elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
+    crocodash fork \
+        --bundle /workspace/bundle \
+        --caseroot /workspace/case \
+        --inputdir /workspace/inputdir \
+        --cesmroot "${CESMROOT}" \
+        --machine ubuntu-latest \
+        --project PROJ123 \
+        --plan '{"xml_files": true, "user_nl": true, "source_mods": true, "xmlchanges": false}'
 else
-    cd /workspace
-    python create_case_from_bundle.py
+    bash /workspace/panama_demo_setup.sh
 fi
 
 conda deactivate
