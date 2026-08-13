@@ -1,0 +1,107 @@
+# CrocoDash regeneration config for the "mom-regional-base" testmods.
+# Produces fresh grid/topo/vgrid/OBC/IC data for the Panama domain, staged
+# under DIN_LOC_ROOT so create_test builds/runs against real CrocoDash
+# output instead of a static fixture. Looked up by
+# regenerate_regional_testdata.py / run_test_suite.sh via the test name's
+# base testmods component (see discover_regional_tests.py).
+#
+# Uses DATM%NYF (not JRA) specifically to avoid needing JRA55's large
+# real-forcing dataset in CI -- NYF's T62 atm forcing is already staged via
+# scripts/download_nyf_inputdata.sh (same as nyf-run-test). SROF (not
+# DROF%GLOFAS) means no runoff grid/mapping is needed either. Tides and
+# chlorophyll are both left unconfigured (off) -- neither is required for
+# this compset (both are purely opt-in in CrocoDash, only triggered by
+# passing tidal_constituents / chl_processed_filepath), so no TPXO or
+# SeaWiFS input is needed.
+#
+# There is no registered alias for this compset -- use the long name
+# directly, exactly as panama_case_config.yaml already does.
+#
+# OBC/IC ocean forcing uses REFERENCE_OCEAN (CrocoDash PR #265,
+# https://github.com/CROCODILE-CESM/CrocoDash/pull/265, branch
+# refactor-obc-ic) -- a synthetic, deterministic, no-network/no-credentials
+# MOM6 forcing product, so no raw GLORYS data staging is needed either.
+# This config requires that branch: crocontainer's CrocoDash submodule
+# pointer must be on/past it before this will import.
+#
+# The test entry in testlist_mom.xml (external CROCODILE-CESM/CESM repo)
+# needs to target this same long-name compset + a testmods matching the
+# staging list below (no TIDES/CHL_FROM_FILE/ROF2OCN_* in its
+# user_nl_mom/shell_commands) -- not yet done, since that's an edit to the
+# CESM fork, not this repo.
+
+crocodash:
+  grid:
+    resolution: 0.05
+    xstart: 278.0
+    lenx: 3.0
+    ystart: 7.0
+    leny: 3.0
+    name: panama1
+
+  topo:
+    min_depth: 9.5
+    source:
+      type: dataset
+      bathymetry_path: /tmp/gebco.nc
+      longitude_coordinate_name: lon
+      latitude_coordinate_name: lat
+      vertical_coordinate_name: elevation
+
+  vgrid:
+    type: hyperbolic
+    nk: 75
+    ratio: 20.0
+
+  case:
+    cesmroot: /workspace/CESM
+    caseroot: /workspace/regional_test_case
+    inputdir: /workspace/regional_test_inputdir
+    compset: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV
+    atm_grid_name: T62
+    machine: ubuntu-latest
+    project: PROJ123
+
+  forcings:
+    date_range: ["2000-01-01 00:00:00", "2000-01-05 00:00:00"]
+    product_name: reference_ocean
+    function_name: get_reference_ocean_data
+    # No raw_data_staging needed -- REFERENCE_OCEAN generates OBC/IC data
+    # in memory, no fetch step between `create --configure-only` and
+    # `process` required. No tidal_constituents / chl args -- tides and
+    # chlorophyll both stay off.
+
+# Bathymetry, fetched the same way panama_demo_setup.sh does before
+# `crocodash create` builds the Topo from it.
+bathymetry_url: https://crocodile-cesm.s3.us-east-1.amazonaws.com/CrocoDash/data/testing_data/gebco_2026_n20.0_s0.0_w-90.0_e-70.0.nc
+
+# Standard CESM inputdata this compset needs beyond what CrocoDash
+# generates -- NYF's T62 atm forcing, staged the same way nyf-run-test
+# already does via scripts/download_nyf_inputdata.sh (wired into
+# container-test.yml's regional-test job, not here).
+additional_inputdata_staging: []
+
+# Where regenerated files land, and which ones need renaming to match the
+# fixed filenames the target testmods' user_nl_mom references. Most
+# CrocoDash forcing outputs (OBC/IC files) already use fixed names with no
+# run-specific suffix -- only the grid/topo/vgrid/mesh files get a
+# "_<grid>_<session_id>"-style suffix and need glob-based renaming.
+staging:
+  din_loc_root_subdir: ocn/mom/croc/testing_data/panama
+  rename_globs:
+    - glob: "ocean_hgrid_*.nc"
+      dest: ocean_hgrid_panama1_352fd1.nc
+    - glob: "ocean_topog_*.nc"
+      dest: ocean_topog_panama1_352fd1.nc
+    - glob: "ocean_vgrid_*.nc"
+      dest: ocean_vgrid_panama1_352fd1.nc
+    - glob: "ESMF_mesh_*.nc"
+      dest: ESMF_mesh_panama1_352fd1.nc
+  copy_as_is:
+    - forcing_obc_segment_001.nc
+    - forcing_obc_segment_002.nc
+    - forcing_obc_segment_003.nc
+    - forcing_obc_segment_004.nc
+    - init_eta.nc
+    - init_tracers.nc
+    - init_vel.nc
