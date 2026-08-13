@@ -69,22 +69,31 @@ def stage_output(cfg, inputdir):
     staging = cfg["staging"]
     dest_dir = Path(os.environ["DIN_LOC_ROOT"]) / staging["din_loc_root_subdir"]
     dest_dir.mkdir(parents=True, exist_ok=True)
-    ocnice = Path(inputdir) / "ocnice"
+    inputdir = Path(inputdir)
+
+    # CrocoDash's output subdirectory name has moved between branches/versions
+    # ("ocnice" vs "ocean") -- search recursively under inputdir rather than
+    # assuming one, so this doesn't silently break again on the next rename.
+    def find(glob):
+        matches = sorted(inputdir.rglob(glob))
+        return matches
 
     for entry in staging.get("rename_globs", []):
-        matches = sorted(ocnice.glob(entry["glob"]))
+        matches = find(entry["glob"])
         if not matches:
             raise FileNotFoundError(
-                f"No files matched {entry['glob']!r} in {ocnice} -- check "
-                "the CrocoDash run actually produced this output."
+                f"No files matched {entry['glob']!r} anywhere under {inputdir} "
+                "-- check the CrocoDash run actually produced this output."
             )
         shutil.copy(matches[-1], dest_dir / entry["dest"])
 
     for fname in staging.get("copy_as_is", []):
-        src = ocnice / fname
-        if not src.exists():
-            raise FileNotFoundError(f"Expected {src} but it doesn't exist.")
-        shutil.copy(src, dest_dir / fname)
+        matches = find(fname)
+        if not matches:
+            raise FileNotFoundError(
+                f"No file named {fname!r} found anywhere under {inputdir}."
+            )
+        shutil.copy(matches[0], dest_dir / fname)
 
     print(f"Staged regenerated data under {dest_dir}")
 
