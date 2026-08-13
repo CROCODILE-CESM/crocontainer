@@ -6,7 +6,7 @@ a new one is just adding a %REGIONAL-compset entry there. Emits each as a
 full CIME test name targeting this container's machine, with the
 container-specific PE-layout testmods appended (ubuntu-latest caps
 MAX_MPITASKS_PER_NODE well below what the Derecho-sized regional testmods
-assume).
+assume). ERS (restart) tests are excluded -- see EXCLUDED_TEST_TYPES.
 
 Usage: discover_regional_tests.py [cesmroot]  (default: /workspace/CESM)
 
@@ -30,6 +30,10 @@ CONTAINER_MACHINE_COMPILER = "ubuntu-latest_gnu"
 # CROCODILE-CESM/CESM fork needed.
 CONTAINER_PES_TESTMODS = "mom-regional-container_smoke"
 REGIONAL_MARKER = "MOM6%REGIONAL"
+# Restart (ERS) tests are out of scope for now -- already validated
+# separately on Derecho, and not needed to check CrocoDash's forcing
+# pipeline, which is this suite's actual goal.
+EXCLUDED_TEST_TYPES = ("ERS",)
 
 
 def load_compset_lnames(path):
@@ -54,6 +58,9 @@ def discover(cesmroot):
             continue
 
         name = test.get("name")
+        if name.startswith(EXCLUDED_TEST_TYPES):
+            continue
+
         grid = test.get("grid")
         testmods = test.get("testmods")
 
