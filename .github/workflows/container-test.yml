@@ -208,13 +208,20 @@ jobs:
         run: |
           # Mounts this repo's own copies of the regen/entrypoint scripts and
           # regional_configs/ so CI runs the current PR's versions rather
-          # than whatever was baked into the already-published image.
+          # than whatever was baked into the already-published image. Also
+          # mounts testmods_overrides/mom/regional/container_smoke straight
+          # into the container's baked-in CESM checkout's testmods_dirs --
+          # this is the PE-layout fix (NTASKS=1, since ubuntu-latest caps
+          # MAX_MPITASKS_PER_NODE well below what the Derecho-sized regional
+          # testmods assume) applied at CI runtime, without needing a PR to
+          # the external CROCODILE-CESM/CESM fork.
           podman run --rm --platform linux/amd64 \
             -v "${{ github.workspace }}/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "${{ github.workspace }}/cesm_scratch:/root/cesm/scratch" \
             -v "${{ github.workspace }}/container_scripts/regenerate_regional_testdata.py:/workspace/regenerate_regional_testdata.py" \
             -v "${{ github.workspace }}/container_scripts/run_test_suite.sh:/workspace/run_test_suite.sh" \
             -v "${{ github.workspace }}/container_scripts/regional_configs:/workspace/regional_configs" \
+            -v "${{ github.workspace }}/container_scripts/testmods_overrides/mom/regional/container_smoke:/workspace/CESM/components/mom/cime_config/testdefs/testmods_dirs/mom/regional/container_smoke" \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_test_suite.sh "${{ matrix.test }}"
 

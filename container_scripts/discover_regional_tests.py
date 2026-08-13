@@ -23,9 +23,11 @@ CONTAINER_MACHINE_COMPILER = "ubuntu-latest_gnu"
 # test uses, via CIME's own "--" multi-mods composition (e.g.
 # "mom-regional-base--mom-regional-container_smoke") -- overrides the
 # Derecho-sized NTASKS_OCN the base regional testmods set, which exceeds
-# ubuntu-latest's MAX_MPITASKS_PER_NODE. Requires a matching
-# testmods_dirs/mom/regional/container_smoke/ dir in the CESM fork (external
-# repo, not part of this monorepo) -- see the plan for details.
+# ubuntu-latest's MAX_MPITASKS_PER_NODE. The matching testmods dir lives in
+# this repo at container_scripts/testmods_overrides/mom/regional/
+# container_smoke/ and is mounted into the container's CESM checkout by
+# container-test.yml at CI runtime -- no change to the external
+# CROCODILE-CESM/CESM fork needed.
 CONTAINER_PES_TESTMODS = "mom-regional-container_smoke"
 REGIONAL_MARKER = "MOM6%REGIONAL"
 
