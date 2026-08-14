@@ -24,11 +24,18 @@
 # This config requires that branch: crocontainer's CrocoDash submodule
 # pointer must be on/past it before this will import.
 #
-# The test entry in testlist_mom.xml (external CROCODILE-CESM/CESM repo)
-# needs to target this same long-name compset + a testmods matching the
-# staging list below (no TIDES/CHL_FROM_FILE/ROF2OCN_* in its
-# user_nl_mom/shell_commands) -- not yet done, since that's an edit to the
-# CESM fork, not this repo.
+# testlist_mom.xml (external MOM_interface repo) registers this test under
+# CR_JRA_GLOFAS, which resolves to a real DATM%JRA + DROF%GLOFAS compset --
+# neither JRA55 atm forcing nor a GLOFAS runoff-mapping file is something
+# this synthetic regen produces. Rather than wait on an external-repo edit
+# to register an NYF-based compset there, `compset_override` below (read by
+# run_test_suite.sh) swaps the compset in the test name actually handed to
+# create_test for this cheaper one -- CIME resolves a compset field by
+# either alias or full long name (CIME/XML/compsets.py::get_compset_match),
+# so substituting a long name for a registered alias at run time is a
+# legal, not a hacky, substitution. testlist_mom.xml stays the source of
+# truth for which tests exist; this just controls which compset variant
+# this container actually runs one of them against.
 
 crocodash:
   # Shrunk from the original Panama fixture's 3deg/0.05res (60x60=3600
@@ -75,6 +82,14 @@ crocodash:
     # in memory, no fetch step between `create --configure-only` and
     # `process` required. No tidal_constituents / chl args -- tides and
     # chlorophyll both stay off.
+
+# Read by run_test_suite.sh: overrides this test's compset (as registered
+# in testlist_mom.xml, CR_JRA_GLOFAS) with this long name when actually
+# invoking create_test -- same DATM%NYF/SROF value as crocodash.case.compset
+# above, for the same reason (see the file header comment): avoids
+# downloading real JRA55 forcing and needing a real GLOFAS runoff-mapping
+# file, neither of which this synthetic regen produces.
+compset_override: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV
 
 # Bathymetry, fetched the same way panama_demo_setup.sh does before
 # `crocodash create` builds the Topo from it.
