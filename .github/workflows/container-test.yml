@@ -167,25 +167,23 @@ jobs:
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_test_suite.sh "${{ matrix.test }}"
 
-      - name: Fix scratch dir permissions for artifact upload
-        # podman runs the container as root, so everything under the bind
-        # mount (case dirs, build objects, run logs) lands root-owned on
-        # the host -- unreadable by the unprivileged runner user that
-        # actions/upload-artifact runs as. -R a+rX adds read to files and
-        # execute to directories without needing a real chown.
-        if: always()
-        run: sudo chmod -R a+rX /mnt/cesm_scratch || true
+      - name: Print run logs on failure
+        # RUNDIR resolves to $CIME_OUTPUT_ROOT/$CASE/run -- CIME_OUTPUT_ROOT
+        # defaults to the ubuntu-latest machine's plain scratch root, not
+        # --test-root, so actual run logs (cesm.log etc) land in a sibling
+        # tree next to tests/regional/, not under it. sudo cat straight into
+        # the job log instead of uploading as an artifact -- podman runs the
+        # container as root, so these are root-owned on the host, and even
+        # `sudo chmod -R` beforehand didn't make them readable to the
+        # unprivileged runner user actions/upload-artifact runs as.
+        if: failure()
+        run: |
+          sudo find /mnt/cesm_scratch -path '*/run/*' -name '*.log*' -print -exec sudo cat {} \;
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cime-test-${{ steps.name.outputs.safe }}-${{ github.run_id }}
-          # RUNDIR resolves to $CIME_OUTPUT_ROOT/$CASE/run -- CIME_OUTPUT_ROOT
-          # defaults to the ubuntu-latest machine's plain scratch root, not
-          # --test-root, so actual run logs (cesm.log etc) land in a sibling
-          # tree at /mnt/cesm_scratch/<casename>/run, not under
-          # tests/regional/. Upload the whole scratch dir so both the case
-          # metadata and the real run logs are captured.
-          path: /mnt/cesm_scratch
+          path: /mnt/cesm_scratch/tests/regional
           if-no-files-found: warn
