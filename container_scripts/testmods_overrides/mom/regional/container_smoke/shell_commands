@@ -12,3 +12,68 @@
 ./xmlchange ICE_NY=10
 ./xmlchange WAV_NX=10
 ./xmlchange WAV_NY=10
+
+# mom/regional/base's user_nl_mom (external MOM_interface repo) matches the
+# original full Panama fixture: 60x60/nk=75 domain, tides on (TPXO-derived
+# tu_segment/tz_segment files), chlorophyll from file (a SeaWiFS-derived
+# file). CrocoDash's REFERENCE_OCEAN only synthesizes OBC/IC ocean data, not
+# tides or chlorophyll (no synthetic TPXO/SeaWiFS generator exists), so
+# mom-regional-base.yaml's regen never produces those files.
+#
+# CIME concatenates every testmods-supplied user_nl_mom fragment into this
+# case's user_nl_mom during case.setup, and buildnml (at case.build) errors
+# "listed more than once" on ANY duplicate key -- there's no "last one
+# wins" override semantics. So the smaller domain / no-tides / no-chl
+# values can't be layered on as another user_nl_mom testmods fragment; they
+# have to patch the case's own concatenated user_nl_mom file directly.
+# shell_commands is the one point in create_test's lifecycle that runs
+# after case.setup (when user_nl_mom already has base's content) and before
+# case.build (when it gets parsed) -- exactly where the NTASKS/OCN_NX
+# overrides above already apply cleanly.
+python3 - <<'PYEOF'
+import re
+
+path = "user_nl_mom"
+with open(path) as f:
+    text = f.read()
+
+# Values from mom-regional-base.yaml's shrunk domain (0.1deg, 10x10 cells,
+# nk=10) -- must match the actual generated grid/vgrid netCDF dimensions or
+# MOM6 crashes with a dimension mismatch reading them. TIDES/CHL_FROM_FILE
+# are turned off since no tidal/chlorophyll input files are generated.
+overrides = {
+    "NIGLOBAL": "10",
+    "NJGLOBAL": "10",
+    "NK": "10",
+    "TIDES": "False",
+    "CHL_FROM_FILE": "FALSE",
+}
+
+for key in overrides:
+    text = re.sub(rf"(?m)^{re.escape(key)}\s*=.*\n?", "", text)
+
+# base's OBC_SEGMENT_*_DATA lines include Uamp/Uphase/Vamp/Vphase/SSHamp/
+# SSHphase referencing tidal files (tu_segment_*.nc/tz_segment_*.nc) that
+# don't exist without tides -- replace with the plain (non-tidal) form,
+# same as what CrocoDash's own regen would write for a no-tides case.
+obc_segments = {}
+for seg in ("001", "002", "003", "004"):
+    key = f"OBC_SEGMENT_{seg}_DATA"
+    text = re.sub(rf"(?m)^{re.escape(key)}\s*=.*\n?", "", text)
+    obc_segments[key] = (
+        f'"U=file:forcing_obc_segment_{seg}.nc(u),'
+        f'V=file:forcing_obc_segment_{seg}.nc(v),'
+        f'SSH=file:forcing_obc_segment_{seg}.nc(eta),'
+        f'TEMP=file:forcing_obc_segment_{seg}.nc(temp),'
+        f'SALT=file:forcing_obc_segment_{seg}.nc(salt)"'
+    )
+
+text += "\n! container_smoke overrides: smaller domain, no tides/chlorophyll\n"
+for key, value in overrides.items():
+    text += f"{key} = {value}\n"
+for key, value in obc_segments.items():
+    text += f"{key} = {value}\n"
+
+with open(path, "w") as f:
+    f.write(text)
+PYEOF
