@@ -172,5 +172,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cime-test-${{ steps.name.outputs.safe }}-${{ github.run_id }}
-          path: /mnt/cesm_scratch/tests/regional
+          # RUNDIR resolves to $CIME_OUTPUT_ROOT/$CASE/run -- CIME_OUTPUT_ROOT
+          # defaults to the ubuntu-latest machine's plain scratch root, not
+          # --test-root, so actual run logs (cesm.log etc) land in a sibling
+          # tree at /mnt/cesm_scratch/<casename>/run, not under
+          # tests/regional/. Upload the whole scratch dir so both the case
+          # metadata and the real run logs are captured.
+          path: /mnt/cesm_scratch
           if-no-files-found: warn
