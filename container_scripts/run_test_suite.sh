@@ -45,11 +45,12 @@ fi
 COMPSET_OVERRIDE=$(grep -E '^compset_override:' "$CONFIG" | sed -E 's/^compset_override:\s*//' | tr -d "\"'" || true)
 TEST_NAME_TO_RUN="$TEST_NAME"
 if [[ -n "$COMPSET_OVERRIDE" ]]; then
+    ORIG_IFS="$IFS"
     IFS='.' read -r -a NAME_FIELDS <<< "$TEST_NAME"
     NAME_FIELDS[2]="$COMPSET_OVERRIDE"
     IFS='.'
     TEST_NAME_TO_RUN="${NAME_FIELDS[*]}"
-    unset IFS
+    IFS="$ORIG_IFS"
     echo "Overriding compset for this run: ${NAME_FIELDS[2]} (testlist_mom.xml still lists this test under its original compset)"
 fi
 
