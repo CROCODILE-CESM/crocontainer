@@ -1,1 +1,14 @@
 ./xmlchange NTASKS=1
+
+# The base regional testmods hardcode OCN_NX/NY=60 (and ICE_/WAV_ to
+# match) for the original 3deg/0.05res Panama fixture. mom-regional-base.yaml
+# was shrunk to 1deg/0.1res (10x10 cells) to keep this a fast smoke test --
+# these must match that grid or MOM6 crashes reading a 10x10 supergrid file
+# against a case configured for 60x60. Applied after mom/regional/base via
+# CIME's "--" multi-mods composition, so these overrides win.
+./xmlchange OCN_NX=10
+./xmlchange OCN_NY=10
+./xmlchange ICE_NX=10
+./xmlchange ICE_NY=10
+./xmlchange WAV_NX=10
+./xmlchange WAV_NY=10

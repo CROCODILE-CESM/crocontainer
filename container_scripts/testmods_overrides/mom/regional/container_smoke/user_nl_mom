@@ -1,0 +1,5 @@
+! Overrides mom/regional/base's NIGLOBAL/NJGLOBAL=60 to match the smaller
+! 10x10 domain in mom-regional-base.yaml -- testmods user_nl_mom files
+! concatenate in order, later entries win.
+NIGLOBAL = 10
+NJGLOBAL = 10

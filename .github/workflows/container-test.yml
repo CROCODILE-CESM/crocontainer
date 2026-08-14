@@ -120,19 +120,27 @@ jobs:
       - name: Pull container image
         run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
 
-      - name: Create scratch directory
-        run: mkdir -p cesm_scratch
+      - name: Create scratch/inputdata directories on /mnt
+        # /mnt (not the runner's small root partition, already the reason
+        # podman's own storage above is redirected there) -- the first CI
+        # run's RUN phase exhausted root-partition disk after 44 minutes
+        # and hung until the job timeout, because cesm_scratch/inputdata
+        # lived under github.workspace (root partition) while only podman's
+        # image layers were on the much larger /mnt disk.
+        run: |
+          sudo mkdir -p /mnt/cesm_scratch /mnt/cesm_nyf_inputdata
+          sudo chown runner:runner /mnt/cesm_scratch /mnt/cesm_nyf_inputdata
 
       - name: Cache NYF inputdata
         uses: actions/cache@v4
         id: nyf-cache
         with:
-          path: cesm_nyf_inputdata
+          path: /mnt/cesm_nyf_inputdata
           key: nyf-inputdata-${{ hashFiles('scripts/nyf_inputdata_list.txt') }}
 
       - name: Download NYF inputdata
         if: steps.nyf-cache.outputs.cache-hit != 'true'
-        run: bash scripts/download_nyf_inputdata.sh ./cesm_nyf_inputdata 8
+        run: bash scripts/download_nyf_inputdata.sh /mnt/cesm_nyf_inputdata 8
 
       - name: Sanitize test name for artifact naming
         id: name
@@ -150,8 +158,8 @@ jobs:
           # testmods assume) applied at CI runtime, without needing a PR to
           # the external CROCODILE-CESM/CESM fork.
           podman run --rm --platform linux/amd64 \
-            -v "${{ github.workspace }}/cesm_nyf_inputdata:/root/cesm/inputdata" \
-            -v "${{ github.workspace }}/cesm_scratch:/root/cesm/scratch" \
+            -v "/mnt/cesm_nyf_inputdata:/root/cesm/inputdata" \
+            -v "/mnt/cesm_scratch:/root/cesm/scratch" \
             -v "${{ github.workspace }}/container_scripts/regenerate_regional_testdata.py:/workspace/regenerate_regional_testdata.py" \
             -v "${{ github.workspace }}/container_scripts/run_test_suite.sh:/workspace/run_test_suite.sh" \
             -v "${{ github.workspace }}/container_scripts/regional_configs:/workspace/regional_configs" \
@@ -164,5 +172,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cime-test-${{ steps.name.outputs.safe }}-${{ github.run_id }}
-          path: ${{ github.workspace }}/cesm_scratch/tests/regional
+          path: /mnt/cesm_scratch/tests/regional
           if-no-files-found: warn
