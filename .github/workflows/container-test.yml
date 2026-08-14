@@ -167,6 +167,15 @@ jobs:
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_test_suite.sh "${{ matrix.test }}"
 
+      - name: Fix scratch dir permissions for artifact upload
+        # podman runs the container as root, so everything under the bind
+        # mount (case dirs, build objects, run logs) lands root-owned on
+        # the host -- unreadable by the unprivileged runner user that
+        # actions/upload-artifact runs as. -R a+rX adds read to files and
+        # execute to directories without needing a real chown.
+        if: always()
+        run: sudo chmod -R a+rX /mnt/cesm_scratch || true
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
