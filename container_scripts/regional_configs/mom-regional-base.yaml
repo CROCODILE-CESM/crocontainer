@@ -117,6 +117,16 @@ staging:
       dest: ocean_vgrid_panama1_352fd1.nc
     - glob: "ESMF_mesh_*.nc"
       dest: ESMF_mesh_panama1_352fd1.nc
+    # base/user_nl_mom explicitly overrides ALE_COORDINATE_CONFIG to the
+    # real panama vgrid file above -- MOM6 never reads this one at runtime.
+    # But MOM_input.yaml's *default* value for ALE_COORDINATE_CONFIG (used
+    # when MOM6_VERTICAL_GRID=zstar_65L, the unoverridden default) points at
+    # vgrid_65L_20200626.nc under this same staging dir, and check_input_data
+    # validates that default's existence regardless of the user_nl_mom
+    # override. Satisfy that phantom check with a second copy of our own
+    # vgrid file under the expected alias name.
+    - glob: "ocean_vgrid_*.nc"
+      dest: vgrid_65L_20200626.nc
   copy_as_is:
     - forcing_obc_segment_001.nc
     - forcing_obc_segment_002.nc

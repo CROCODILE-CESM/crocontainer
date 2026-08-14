@@ -13,6 +13,16 @@
 ./xmlchange WAV_NX=10
 ./xmlchange WAV_NY=10
 
+# base's shell_commands points ROF2OCN_LIQ/ICE_RMAPNAME at a GLOFAS
+# runoff-mapping file unconditionally, regardless of which ROF component is
+# actually active. Our compset_override (see regional_configs/*.yaml) swaps
+# in SROF, which never uses a runoff map, so there's nothing to point these
+# at -- "unset" is CIME's own sentinel for "no mapping needed" (any XML
+# value with no "/" in it is treated as a special value and skipped by
+# check_input_data -- see CIME/case/check_input_data.py), not a workaround.
+./xmlchange ROF2OCN_LIQ_RMAPNAME=unset
+./xmlchange ROF2OCN_ICE_RMAPNAME=unset
+
 # mom/regional/base's user_nl_mom (external MOM_interface repo) matches the
 # original full Panama fixture: 60x60/nk=75 domain, tides on (TPXO-derived
 # tu_segment/tz_segment files), chlorophyll from file (a SeaWiFS-derived
