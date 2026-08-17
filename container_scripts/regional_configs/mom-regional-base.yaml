@@ -41,8 +41,8 @@ crocodash:
   # Shrunk from the original Panama fixture's 3deg/0.05res (60x60=3600
   # cells) to 1deg/0.1res (10x10=100 cells) -- the first CI run's RUN phase
   # exhausted the GitHub-hosted runner's ~14GB disk after 44 minutes then
-  # hung until the job timeout. A much smaller domain (still inside the
-  # same pre-staged GEBCO subset's bounds) keeps this a true smoke test.
+  # hung until the job timeout. A much smaller domain keeps this a true
+  # smoke test.
   grid:
     resolution: 0.1
     xstart: 278.0
@@ -51,14 +51,14 @@ crocodash:
     leny: 1.0
     name: panama1
 
+  # Flat bathymetry, not a real GEBCO subset -- this is a smoke test, and
+  # CrocoDash's own default (Topo.set_flat) needs no external file/network
+  # fetch at all, unlike the "dataset" source type this config used before.
   topo:
     min_depth: 9.5
     source:
-      type: dataset
-      bathymetry_path: /tmp/gebco.nc
-      longitude_coordinate_name: lon
-      latitude_coordinate_name: lat
-      vertical_coordinate_name: elevation
+      type: flat
+      depth: 1000.0
 
   vgrid:
     type: hyperbolic
@@ -90,10 +90,6 @@ crocodash:
 # downloading real JRA55 forcing and needing a real GLOFAS runoff-mapping
 # file, neither of which this synthetic regen produces.
 compset_override: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV
-
-# Bathymetry, fetched the same way panama_demo_setup.sh does before
-# `crocodash create` builds the Topo from it.
-bathymetry_url: https://crocodile-cesm.s3.us-east-1.amazonaws.com/CrocoDash/data/testing_data/gebco_2026_n20.0_s0.0_w-90.0_e-70.0.nc
 
 # Standard CESM inputdata this compset needs beyond what CrocoDash
 # generates -- NYF's T62 atm forcing, staged the same way nyf-run-test

@@ -16,14 +16,6 @@ from pathlib import Path
 import yaml
 
 
-def stage_bathymetry(cfg):
-    bathy_path = cfg["crocodash"]["topo"]["source"].get("bathymetry_path")
-    bathy_url = cfg.get("bathymetry_url")
-    if bathy_path and bathy_url and not Path(bathy_path).exists():
-        Path(bathy_path).parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["wget", "-q", "-O", bathy_path, bathy_url], check=True)
-
-
 def stage_raw_data(cfg, raw_data_dir):
     raw_cfg = cfg.get("raw_data_staging") or {}
     s3_base = raw_cfg.get("s3_base")
@@ -111,7 +103,6 @@ def main():
     inputdir = Path(case_cfg["inputdir"])
     raw_data_dir = inputdir / "extract_forcings" / "raw_data"
 
-    stage_bathymetry(cfg)
     stage_additional_inputdata(cfg)
 
     tmp_config = Path("/tmp/regional_test_crocodash_config.yaml")
