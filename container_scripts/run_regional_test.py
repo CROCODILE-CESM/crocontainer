@@ -140,7 +140,7 @@ def run_create_test(test_name_to_run):
         p for p in env.get("PATH", "").split(os.pathsep) if "/envs/CrocoDash" not in p
     )
     env["ESMFMKFILE"] = str(
-        next(Path(env["ESMF_INSTALL_PREFIX"], "lib").glob("esmf.mk"))
+        next(Path(env["ESMF_INSTALL_PREFIX"], "lib").rglob("esmf.mk"))
     )
     env["OMPI_CC"] = "gcc"
     env["OMPI_FC"] = "gfortran"
