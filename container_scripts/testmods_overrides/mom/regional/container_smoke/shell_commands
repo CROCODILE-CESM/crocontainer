@@ -80,6 +80,25 @@ overrides = {
 for key in overrides:
     text = re.sub(rf"(?m)^{re.escape(key)}\s*=.*\n?", "", text)
 
+# TIDES=False alone doesn't stop MOM6's OBC registry from still expecting
+# Uamp/Vamp/SSHamp tidal fields in OBC_SEGMENT_*_DATA -- it's driven by
+# these separate tidal-detail params (still True/set from base's
+# user_nl_mom regardless of TIDES), which crashed with "FATAL: Values
+# needed for OBC segment 1" once those fields were stripped below. Drop
+# them outright; with tides fully off none of them are meaningful.
+tide_detail_keys = (
+    "TIDE_M2",
+    "CD_TIDES",
+    "TIDE_USE_EQ_PHASE",
+    "TIDE_REF_DATE",
+    "OBC_TIDE_ADD_EQ_PHASE",
+    "OBC_TIDE_N_CONSTITUENTS",
+    "OBC_TIDE_CONSTITUENTS",
+    "OBC_TIDE_REF_DATE",
+)
+for key in tide_detail_keys:
+    text = re.sub(rf"(?m)^{re.escape(key)}\s*=.*\n?", "", text)
+
 # base's OBC_SEGMENT_*_DATA lines include Uamp/Uphase/Vamp/Vphase/SSHamp/
 # SSHphase referencing tidal files (tu_segment_*.nc/tz_segment_*.nc) that
 # don't exist without tides -- replace with the plain (non-tidal) form,
