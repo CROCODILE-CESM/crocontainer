@@ -8,7 +8,7 @@ export USER=root
 export DIN_LOC_ROOT=/root/cesm/inputdata
 unset NCAR_HOST
 
-# Case setup -- three modes, checked in order:
+# Case setup -- two modes, checked in order:
 #   1. Mount a CrocoDash YAML case config as /workspace/case_config.yaml to
 #      build any case directly via the CLI (general-purpose mode). Its
 #      case.caseroot/inputdir must be /workspace/case and /workspace/inputdir
@@ -16,9 +16,9 @@ unset NCAR_HOST
 #        docker run -v /path/to/your_config.yaml:/workspace/case_config.yaml ...
 #   2. Mount a `crocodash bundle` output directory as /workspace/bundle to
 #      reconstruct a case shared from another machine/user.
-#   3. Neither mounted: fall back to the built-in Panama demo case (baked
-#      into the image), which stages pre-fetched test data since CI/demo
-#      environments have no live data-access credentials.
+# One of the two must be mounted -- there's no built-in demo case fallback;
+# see container_scripts/regional_configs/*.yaml + run_regional_test.py for a
+# CI-validated, ready-to-run regional case definition instead.
 if [[ -f /workspace/case_config.yaml ]]; then
     crocodash create --config /workspace/case_config.yaml --override
 elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
@@ -31,7 +31,9 @@ elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
         --project PROJ123 \
         --plan '{"xml_files": true, "user_nl": true, "source_mods": true, "xmlchanges": false}'
 else
-    bash /workspace/panama_demo_setup.sh
+    echo "Mount a CrocoDash YAML case config at /workspace/case_config.yaml, or a" >&2
+    echo "\`crocodash bundle\` output directory at /workspace/bundle. See the README." >&2
+    exit 1
 fi
 
 conda deactivate

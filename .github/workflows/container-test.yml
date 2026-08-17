@@ -15,23 +15,11 @@ jobs:
     # GH-hosted so it isn't blocked by the self-hosted runner's queue/uptime.
     runs-on: ubuntu-latest
     steps:
-      - name: Configure podman storage on /mnt
-        run: |
-          sudo mkdir -p /mnt/podman-storage
-          sudo chown runner:runner /mnt/podman-storage
-          mkdir -p $HOME/.config/containers
-          printf '[storage]\ndriver = "overlay"\ngraphRoot = "/mnt/podman-storage"\n' \
-            > $HOME/.config/containers/storage.conf
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull container image
-        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
+      # Local composite actions (uses: ./...) resolve relative to the
+      # checked-out repo, so this needs a checkout even though nothing else
+      # in this job reads repo files.
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-podman
 
       - name: Verify container environment
         run: |
@@ -42,7 +30,6 @@ jobs:
               python -c 'from CrocoDash.case import Case; print(\"CrocoDash OK\")' && \
               test -f /workspace/CESM/cime/scripts/create_newcase && echo 'CESM OK' && \
               test -f /workspace/run_case.sh && echo 'run_case.sh OK' && \
-              test -f /workspace/panama_demo_setup.sh && echo 'panama_demo_setup.sh OK' && \
               crocodash fork --help > /dev/null && echo 'crocodash fork OK' && \
               crocodash create --help 2>&1 | grep -q -- '--configure-only' && echo 'crocodash create --configure-only OK'
             "
@@ -60,23 +47,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure podman storage on /mnt
-        run: |
-          sudo mkdir -p /mnt/podman-storage
-          sudo chown runner:runner /mnt/podman-storage
-          mkdir -p $HOME/.config/containers
-          printf '[storage]\ndriver = "overlay"\ngraphRoot = "/mnt/podman-storage"\n' \
-            > $HOME/.config/containers/storage.conf
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull container image
-        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
+      - uses: ./.github/actions/setup-podman
 
       - name: List regional (MOM6%REGIONAL) tests
         id: discover
@@ -106,23 +77,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure podman storage on /mnt
-        run: |
-          sudo mkdir -p /mnt/podman-storage
-          sudo chown runner:runner /mnt/podman-storage
-          mkdir -p $HOME/.config/containers
-          printf '[storage]\ndriver = "overlay"\ngraphRoot = "/mnt/podman-storage"\n' \
-            > $HOME/.config/containers/storage.conf
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull container image
-        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
+      - uses: ./.github/actions/setup-podman
 
       - name: Create scratch/inputdata directories on /mnt
         # /mnt (not the runner's small root partition, already the reason
@@ -162,12 +117,11 @@ jobs:
           podman run --rm --platform linux/amd64 \
             -v "/mnt/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "/mnt/cesm_scratch:/root/cesm/scratch" \
-            -v "${{ github.workspace }}/container_scripts/regenerate_regional_testdata.py:/workspace/regenerate_regional_testdata.py" \
-            -v "${{ github.workspace }}/container_scripts/run_test_suite.sh:/workspace/run_test_suite.sh" \
+            -v "${{ github.workspace }}/container_scripts/run_regional_test.py:/workspace/run_regional_test.py" \
             -v "${{ github.workspace }}/container_scripts/regional_configs:/workspace/regional_configs" \
             -v "${{ github.workspace }}/container_scripts/testmods_overrides/mom/regional/container_smoke:/workspace/CESM/components/mom/cime_config/testdefs/testmods_dirs/mom/regional/container_smoke" \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
-            /bin/bash /workspace/run_test_suite.sh "${{ matrix.test }}"
+            conda run -n CrocoDash python /workspace/run_regional_test.py "${{ matrix.test }}"
 
       - name: Print run logs on failure
         # RUNDIR resolves to $CIME_OUTPUT_ROOT/$CASE/run -- CIME_OUTPUT_ROOT

@@ -77,9 +77,6 @@ overrides = {
     "CHL_FROM_FILE": "FALSE",
 }
 
-for key in overrides:
-    text = re.sub(rf"(?m)^{re.escape(key)}\s*=.*\n?", "", text)
-
 # TIDES=False alone doesn't stop MOM6's OBC registry from still expecting
 # Uamp/Vamp/SSHamp tidal fields in OBC_SEGMENT_*_DATA -- it's driven by
 # these separate tidal-detail params (still True/set from base's
@@ -96,8 +93,6 @@ tide_detail_keys = (
     "OBC_TIDE_CONSTITUENTS",
     "OBC_TIDE_REF_DATE",
 )
-for key in tide_detail_keys:
-    text = re.sub(rf"(?m)^{re.escape(key)}\s*=.*\n?", "", text)
 
 # CHL_FROM_FILE=FALSE alone doesn't stop MOM6 from needing a chlorophyll
 # source -- VAR_PEN_SW=True (still set from base) tells it to vary
@@ -110,7 +105,8 @@ chl_detail_keys = (
     "VAR_PEN_SW",
     "PEN_SW_NBANDS",
 )
-for key in chl_detail_keys:
+
+for key in (*overrides, *tide_detail_keys, *chl_detail_keys):
     text = re.sub(rf"(?m)^{re.escape(key)}\s*=.*\n?", "", text)
 
 # base's OBC_SEGMENT_*_DATA lines include Uamp/Uphase/Vamp/Vphase/SSHamp/

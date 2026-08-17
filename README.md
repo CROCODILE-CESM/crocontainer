@@ -5,7 +5,7 @@
 Crocontainer is a pre-built container image that lets you run a [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash)-configured CESM regional ocean case anywhere — on your laptop or on an HPC system like Derecho — without installing CESM, ESMF, or MPI yourself.
 
 The primary workflow is:
-1. **Download & Edit** `container_scripts/panama_case_config.yaml` — a CrocoDash YAML case config — to configure your regional ocean domain.
+1. **Write** a CrocoDash YAML case config to configure your regional ocean domain — see `container_scripts/regional_configs/mom-regional-base.yaml` for a working example (its `case.caseroot`/`case.inputdir` must be `/workspace/case`/`/workspace/inputdir` for your own copy).
 2. **Run** the container with your edited YAML config mounted as `/workspace/case_config.yaml` — it builds, configures, and executes the case inside via the `crocodash` CLI. No script to write or mount.
 
 If you need features from a CrocoDash version newer than what's in the container image, see [Bundle Mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container) instead.
@@ -44,12 +44,13 @@ The script is **idempotent** — re-running skips any files already present, so 
 
 ### Step 2: Run your case
 
-Clone this repository (to get `panama_case_config.yaml` as a starting template, and helper scripts), create a scratch directory, and run:
+Clone this repository (to get a starting template config and helper scripts), create a scratch directory, and run:
 
 ```bash
 mkdir -p cesm_scratch
-cp container_scripts/panama_case_config.yaml my_case_config.yaml
-# edit my_case_config.yaml for your domain (see below), then:
+cp container_scripts/regional_configs/mom-regional-base.yaml my_case_config.yaml
+# edit my_case_config.yaml for your domain (see below) -- set case.caseroot to
+# /workspace/case and case.inputdir to /workspace/inputdir, then:
 
 # Linux / macOS / Windows (WSL2)
 podman run --rm \
@@ -62,7 +63,7 @@ podman run --rm \
 
 > **Windows users:** run this from inside a WSL2 Ubuntu terminal, not from PowerShell. See [On Windows (WSL2)](#on-windows-wsl2) for setup.
 
-If you run the container with nothing mounted at all, it falls back to a built-in Panama demo case baked into the image — see [YAML Config Mode](#yaml-config-mode-default).
+A YAML config (or a [bundle](#bundle-mode-when-your-crocodash-is-newer-than-the-container)) must be mounted — see [YAML Config Mode](#yaml-config-mode-default).
 
 ---
 
@@ -72,9 +73,9 @@ If you run the container with nothing mounted at all, it falls back to a built-i
 
 The container includes a full CESM checkout at `/workspace/CESM` and the `CrocoDash` conda environment. You configure your case with a CrocoDash YAML case config mounted at `/workspace/case_config.yaml` — `run_case.sh` runs `crocodash create --config /workspace/case_config.yaml --override` directly; there's no script to write or mount. Your config's `case.caseroot`/`case.inputdir` must be `/workspace/case`/`/workspace/inputdir` to match the paths `run_case.sh` uses for the CIME build/submit steps that follow.
 
-If neither a YAML config nor a [bundle](#bundle-mode-when-your-crocodash-is-newer-than-the-container) is mounted, `run_case.sh` falls back to a built-in Panama demo case (`panama_case_config.yaml` + `panama_demo_setup.sh`, baked into the image) that stages pre-fetched test data instead of hitting a live data-access API — useful for a quick smoke test, and what the CI workflow uses to validate the container on every platform.
+One of a YAML config or a [bundle](#bundle-mode-when-your-crocodash-is-newer-than-the-container) must be mounted -- `run_case.sh` exits with an error otherwise.
 
-`container_scripts/panama_case_config.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) for your own case. Edit a copy of it to configure:
+`container_scripts/regional_configs/mom-regional-base.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) for your own case -- it's also the config the container CI itself regenerates and validates weekly (see [CI/CD](#cicd)). Edit a copy of it to configure:
 
 - **Domain**: `grid.xstart`, `grid.ystart`, `grid.lenx`, `grid.leny`
 - **Resolution**: `grid.resolution`
@@ -158,8 +159,9 @@ git clone https://github.com/CROCODILE-CESM/crocontainer ~/crocontainer
 cd ~/crocontainer
 bash scripts/download_nyf_inputdata.sh ~/cesm_nyf_inputdata
 mkdir -p ~/cesm_scratch
-cp container_scripts/panama_case_config.yaml my_case_config.yaml
-# edit my_case_config.yaml for your domain, then:
+cp container_scripts/regional_configs/mom-regional-base.yaml my_case_config.yaml
+# edit my_case_config.yaml for your domain (set case.caseroot to /workspace/case
+# and case.inputdir to /workspace/inputdir), then:
 
 podman run --rm \
   -v ~/cesm_nyf_inputdata:/root/cesm/inputdata \
@@ -330,11 +332,9 @@ Because this is a `user_nl` file, it is captured by `crocodash bundle` and carri
 | `/workspace/CrocoDash` | CrocoDash installation + conda environment named `CrocoDash` |
 | `/workspace/case_config.yaml` | Mount point for your own YAML case config (YAML config mode) |
 | `/workspace/bundle` | Mount point for your case bundle |
-| `/workspace/panama_case_config.yaml` | Built-in Panama demo case config, used when nothing else is mounted |
-| `/workspace/panama_demo_setup.sh` | Stages test data and builds the Panama demo case via the CLI |
 | `/root/cesm/inputdata` | Mount point for CESM input data |
 | `/root/cesm/scratch` | Mount point for scratch/output |
-| `/workspace/run_case.sh` | Orchestrates the full flow: create/fork/demo → build case → submit |
+| `/workspace/run_case.sh` | Orchestrates the full flow: create/fork → build case → submit |
 
 CESM must be run with the `CrocoDash` conda environment **deactivated**. `run_case.sh` handles this automatically.
 
@@ -380,7 +380,7 @@ The Dockerfile:
 2. Builds ESMF v8.9.1 from source
 3. Installs Miniconda and creates the `CrocoDash` conda environment
 4. Clones CESM and runs `git-fleximod update`
-5. Copies `run_case.sh`, `panama_demo_setup.sh`, and `panama_case_config.yaml` into `/workspace`
+5. Copies `run_case.sh` into `/workspace`
 
 ### CI/CD
 
@@ -392,7 +392,7 @@ Two GitHub Actions workflows handle CI/CD:
 - **Registry**: `ghcr.io/crocodile-cesm/crocontainer`
 - **Tags**: `latest-amd64`, `latest-arm64`, per-commit `sha-<hash>-<arch>`, and a merged `latest` multi-arch manifest
 
-**Container Tests** (`.github/workflows/container-test.yml`): validates the image on every push and weekly.
-- **Platforms**: `ubuntu-latest` (covers Linux and Windows-via-WSL2 users) and `macos-latest`
-- **Smoke test**: pulls the image and verifies CrocoDash imports and CESM files are present
-- **NYF end-to-end** (scheduled/manual only): runs a full NYF case inside the container
+**Container Tests** (`.github/workflows/container-test.yml`): validates the image on every push, weekly, and via manual dispatch. Three jobs, in sequence:
+- **`smoke-test`**: pulls the image and verifies CrocoDash imports and CESM files are present
+- **`discover-regional-tests`** (scheduled/manual only): parses `testlist_mom.xml`/`config_compsets.xml` out of the image for every `MOM6%REGIONAL` test, emitting a JSON list for the next job's matrix -- see `container_scripts/discover_regional_tests.py`
+- **`regional-test`** (scheduled/manual only): one matrix job per discovered test -- regenerates that test's CrocoDash input data fresh (`container_scripts/run_regional_test.py` + `regional_configs/*.yaml`) and runs it via CIME's `create_test`, with cached NYF inputdata to skip live downloads

@@ -1,9 +1,8 @@
 # CrocoDash regeneration config for the "mom-regional-base" testmods.
 # Produces fresh grid/topo/vgrid/OBC/IC data for the Panama domain, staged
 # under DIN_LOC_ROOT so create_test builds/runs against real CrocoDash
-# output instead of a static fixture. Looked up by
-# regenerate_regional_testdata.py / run_test_suite.sh via the test name's
-# base testmods component (see discover_regional_tests.py).
+# output instead of a static fixture. Looked up by run_regional_test.py via
+# the test name's base testmods component (see discover_regional_tests.py).
 #
 # Uses DATM%NYF (not JRA) specifically to avoid needing JRA55's large
 # real-forcing dataset in CI -- NYF's T62 atm forcing is already staged via
@@ -15,7 +14,7 @@
 # SeaWiFS input is needed.
 #
 # There is no registered alias for this compset -- use the long name
-# directly, exactly as panama_case_config.yaml already does.
+# directly.
 #
 # OBC/IC ocean forcing uses REFERENCE_OCEAN (CrocoDash PR #265,
 # https://github.com/CROCODILE-CESM/CrocoDash/pull/265, branch
@@ -29,7 +28,7 @@
 # neither JRA55 atm forcing nor a GLOFAS runoff-mapping file is something
 # this synthetic regen produces. Rather than wait on an external-repo edit
 # to register an NYF-based compset there, `compset_override` below (read by
-# run_test_suite.sh) swaps the compset in the test name actually handed to
+# run_regional_test.py) swaps the compset in the test name actually handed to
 # create_test for this cheaper one -- CIME resolves a compset field by
 # either alias or full long name (CIME/XML/compsets.py::get_compset_match),
 # so substituting a long name for a registered alias at run time is a
@@ -83,19 +82,13 @@ crocodash:
     # `process` required. No tidal_constituents / chl args -- tides and
     # chlorophyll both stay off.
 
-# Read by run_test_suite.sh: overrides this test's compset (as registered
+# Read by run_regional_test.py: overrides this test's compset (as registered
 # in testlist_mom.xml, CR_JRA_GLOFAS) with this long name when actually
 # invoking create_test -- same DATM%NYF/SROF value as crocodash.case.compset
 # above, for the same reason (see the file header comment): avoids
 # downloading real JRA55 forcing and needing a real GLOFAS runoff-mapping
 # file, neither of which this synthetic regen produces.
 compset_override: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV
-
-# Standard CESM inputdata this compset needs beyond what CrocoDash
-# generates -- NYF's T62 atm forcing, staged the same way nyf-run-test
-# already does via scripts/download_nyf_inputdata.sh (wired into
-# container-test.yml's regional-test job, not here).
-additional_inputdata_staging: []
 
 # Where regenerated files land, and which ones need renaming to match the
 # fixed filenames the target testmods' user_nl_mom references. Most
