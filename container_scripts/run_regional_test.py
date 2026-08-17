@@ -135,6 +135,20 @@ def run_create_test(test_name_to_run):
     # inside `conda run -n CrocoDash` (needed above for PyYAML/crocodash),
     # reconstruct the same isolation explicitly by stripping the CrocoDash
     # env's own bin dir from PATH for just this one subprocess call.
+    #
+    # CIME's short-term archiver (case_st_archive.py) shells out to `ncdump`
+    # to inspect restart-file time axes -- this container only apt-installs
+    # libnetcdf-dev/libnetcdff-dev (headers + shared libs), not the
+    # netcdf-bin package, so `ncdump` only exists inside the CrocoDash conda
+    # env we're about to strip out. Symlink it (and ncgen/nccopy, same
+    # package) into /usr/local/bin, which stays on PATH after the strip
+    # below, before doing the strip.
+    for tool in ("ncdump", "ncgen", "nccopy"):
+        src = shutil.which(tool)
+        dest = Path("/usr/local/bin", tool)
+        if src and not dest.exists():
+            dest.symlink_to(src)
+
     env = dict(os.environ)
     env["PATH"] = os.pathsep.join(
         p for p in env.get("PATH", "").split(os.pathsep) if "/envs/CrocoDash" not in p
