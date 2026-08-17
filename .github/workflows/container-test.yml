@@ -11,7 +11,9 @@ on:
 jobs:
   smoke-test:
     name: Smoke test
-    runs-on: gha-runner-crocogallery
+    # No GLADE/NYF dependency here, unlike regional-test -- stays on
+    # GH-hosted so it isn't blocked by the self-hosted runner's queue/uptime.
+    runs-on: ubuntu-latest
     steps:
       - name: Configure podman storage on /mnt
         run: |
@@ -47,7 +49,9 @@ jobs:
 
   discover-regional-tests:
     name: Discover regional tests
-    runs-on: gha-runner-crocogallery
+    # Just parses testlist_mom.xml/config_compsets.xml out of the image --
+    # no GLADE/NYF dependency, same reasoning as smoke-test above.
+    runs-on: ubuntu-latest
     needs: smoke-test
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     outputs:
