@@ -94,7 +94,7 @@ jobs:
 
   regional-test:
     name: ${{ matrix.test }}
-    runs-on: gha-runner-crocogallery
+    runs-on: ubuntu-latest
     needs: discover-regional-tests
     if: needs.discover-regional-tests.outputs.tests != '[]'
     timeout-minutes: 150
@@ -124,10 +124,25 @@ jobs:
       - name: Pull container image
         run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
 
-      - name: Create scratch directory on /mnt
+      - name: Create scratch/inputdata directories on /mnt
+        # /mnt (not the runner's small root partition, already the reason
+        # podman's own storage above is redirected there) -- github.workspace
+        # sits on the small root partition, while /mnt is the much larger
+        # temp disk podman's own image layers are already redirected to.
         run: |
-          sudo mkdir -p /mnt/cesm_scratch
-          sudo chown runner:runner /mnt/cesm_scratch
+          sudo mkdir -p /mnt/cesm_scratch /mnt/cesm_nyf_inputdata
+          sudo chown runner:runner /mnt/cesm_scratch /mnt/cesm_nyf_inputdata
+
+      - name: Cache NYF inputdata
+        uses: actions/cache@v4
+        id: nyf-cache
+        with:
+          path: /mnt/cesm_nyf_inputdata
+          key: nyf-inputdata-${{ hashFiles('scripts/nyf_inputdata_list.txt') }}
+
+      - name: Download NYF inputdata
+        if: steps.nyf-cache.outputs.cache-hit != 'true'
+        run: bash scripts/download_nyf_inputdata.sh /mnt/cesm_nyf_inputdata 8
 
       - name: Sanitize test name for artifact naming
         id: name
@@ -144,16 +159,8 @@ jobs:
           # MAX_MPITASKS_PER_NODE well below what the Derecho-sized regional
           # testmods assume) applied at CI runtime, without needing a PR to
           # the external CROCODILE-CESM/CESM fork.
-          #
-          # gha-runner-crocogallery is self-hosted on GLADE -- mount the
-          # real campus inputdata tree directly instead of downloading NYF
-          # data every run (which download_nyf_inputdata.sh/actions/cache
-          # existed for on GH-hosted ubuntu-latest). Our own regen output
-          # (grid/topog/vgrid/OBC/IC) lands under this same tree's
-          # ocn/mom/croc/testing_data/panama subdir, the same isolated path
-          # the original hand-built fixture already lived at.
           podman run --rm --platform linux/amd64 \
-            -v "/glade/campaign/cesm/cesmdata/inputdata:/root/cesm/inputdata" \
+            -v "/mnt/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "/mnt/cesm_scratch:/root/cesm/scratch" \
             -v "${{ github.workspace }}/container_scripts/regenerate_regional_testdata.py:/workspace/regenerate_regional_testdata.py" \
             -v "${{ github.workspace }}/container_scripts/run_test_suite.sh:/workspace/run_test_suite.sh" \
