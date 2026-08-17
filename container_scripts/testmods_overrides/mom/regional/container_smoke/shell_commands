@@ -1,5 +1,16 @@
 ./xmlchange NTASKS=1
 
+# See also src.mom/diag_table in this same directory: MOM6's buildnml
+# copies a SourceMods/src.mom/diag_table verbatim and skips its own
+# diag_table.yaml-template generation entirely (config_component.xml
+# documents this as the supported way to customize OCN_DIAG_MODE output).
+# The generated diag_table's "static" file entry omits the new_file_freq/
+# new_file_freq_units pair the other entries have, which this container's
+# FMS build parses as a FATAL ("Invalid new file frequency units") rather
+# than the older lenient behavior -- since this is just a smoke test with
+# no need to inspect diagnostic output, side-step the whole template
+# instead of patching the external diag_table.yaml.
+#
 # The base regional testmods hardcode OCN_NX/NY=60 (and ICE_/WAV_ to
 # match) for the original 3deg/0.05res Panama fixture. mom-regional-base.yaml
 # was shrunk to 1deg/0.1res (10x10 cells) to keep this a fast smoke test --
