@@ -103,8 +103,54 @@ def stage_output(cfg, inputdir):
     print(f"Staged regenerated data under {dest_dir}")
 
 
+def write_synthetic_marbl_ic(spec):
+    # CrocoDash's BGCICConfigurator is `required_for_compsets = ["MARBL"]`
+    # and its InputFileParam validates that marbl_ic_filepath already
+    # exists on disk before `crocodash create` will proceed -- REFERENCE_OCEAN
+    # has no real ecosys IC data to offer, so this writes a minimal
+    # placeholder ourselves. process_bgc_ic() (CrocoDash's own code) just
+    # shutil.copy()s whatever we point it at -- no regridding -- so this
+    # needs to already be in MOM6's "on-grid" format: dims named exactly
+    # nx/ny/zl (matching how CrocoDash's own init_tracers.nc writes
+    # temp/salt in extract_forcings/mom6.py's _regrid_ic -- MOM6's
+    # MARBL_tracers.F90 reads MARBL_TRACERS_IC_FILE through the same
+    # MOM_initialize_tracer_from_Z routine as TEMP_SALT_Z_INIT_FILE), one
+    # variable per MARBL tracer, filled with a small positive constant
+    # (not exactly 0 -- avoids feeding MARBL's chemistry a zero
+    # concentration). MARBL_TRACERS_INIT_VERTICAL_REMAP_ONLY=True (set by
+    # container_smoke's shell_commands) tells MOM6 this file is already on
+    # the model's native grid, skipping the lat/lon horizontal
+    # interpolation path a real global product would otherwise need.
+    import numpy as np
+    import xarray as xr
+
+    nx, ny, nk = spec["nx"], spec["ny"], spec["nk"]
+    fill_value = -1e20
+    ds = xr.Dataset(
+        {
+            tracer: (
+                ("nx", "ny", "zl"),
+                np.full((nx, ny, nk), 1e-6, dtype="float32"),
+            )
+            for tracer in spec["tracers"]
+        }
+    )
+    encoding = {
+        tracer: {"_FillValue": fill_value, "missing_value": fill_value}
+        for tracer in spec["tracers"]
+    }
+    path = Path(spec["path"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ds.to_netcdf(path, encoding=encoding)
+    print(f"Wrote synthetic MARBL IC file to {path}")
+
+
 def regenerate_data(cfg):
     case_cfg = cfg["crocodash"]["case"]
+
+    marbl_ic_spec = cfg.get("synthetic_marbl_ic")
+    if marbl_ic_spec:
+        write_synthetic_marbl_ic(marbl_ic_spec)
 
     tmp_config = Path("/tmp/regional_test_crocodash_config.yaml")
     with open(tmp_config, "w") as f:

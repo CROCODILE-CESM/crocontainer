@@ -72,7 +72,13 @@ with open(path) as f:
 # chlorophyll input files are generated. READ_RIV_FLUXES is bgc-only
 # (absent from base's user_nl_mom, so a harmless no-op there) -- see
 # bgc_detail_keys below for why it can't just be left at its testmods
-# default.
+# default. MARBL_TRACERS_INIT_VERTICAL_REMAP_ONLY (also bgc-only, absent
+# from base) tells MOM6 the MARBL tracer IC file is already on the model's
+# native grid (nx/ny/zl dims, same convention as TEMP_SALT_Z_INIT_FILE) --
+# without it MOM6 expects a real global lat-lon product and tries to
+# horizontally interpolate our synthetic on-grid file, which doesn't have
+# lat/lon axes to interpolate from. See mom-regional-bgc.yaml's
+# synthetic_marbl_ic for the file itself.
 overrides = {
     "NIGLOBAL": "10",
     "NJGLOBAL": "10",
@@ -80,6 +86,7 @@ overrides = {
     "TIDES": "False",
     "CHL_FROM_FILE": "FALSE",
     "READ_RIV_FLUXES": "False",
+    "MARBL_TRACERS_INIT_VERTICAL_REMAP_ONLY": "True",
 }
 
 # TIDES=False alone doesn't stop MOM6's OBC registry from still expecting
@@ -111,20 +118,23 @@ chl_detail_keys = (
     "PEN_SW_NBANDS",
 )
 
-# mom/regional/bgc's user_nl_mom (external MOM_interface repo) sets a real
-# MARBL tracer IC file, three grid-native iron-flux files, and a river-
-# nutrient flux file/toggle -- none of which CrocoDash's REFERENCE_OCEAN
-# forcing (no marbl_var_names) produces. Drop them outright so MOM6/MARBL
-# falls back to its own internal tracer initialization instead of trying
-# to read data this regen never generates. Absent from base's user_nl_mom,
-# so a no-op there.
-bgc_detail_keys = (
-    "MARBL_TRACERS_IC_FILE",
-    "MARBL_FESEDFLUX_FILE",
-    "MARBL_FEVENTFLUX_FILE",
-    "MARBL_FESEDFLUXRED_FILE",
-    "RIV_FLUX_FILE",
-)
+# mom/regional/bgc's user_nl_mom (external MOM_interface repo) sets
+# READ_RIV_FLUXES=True + a river-nutrient flux file -- CrocoDash's
+# BGCRiverNutrientsConfigurator is optional (needs a real
+# global_river_nutrients_filepath we don't supply, so it stays inactive)
+# and nothing else produces this file. Drop the filename outright;
+# READ_RIV_FLUXES itself is turned off via the `overrides` dict above.
+# Absent from base's user_nl_mom, so a no-op there.
+#
+# By contrast, MARBL_TRACERS_IC_FILE and the three iron-flux file params
+# are NOT stripped here -- BGCICConfigurator and BGCIronForcingConfigurator
+# are both `required_for_compsets = ["MARBL"]` in CrocoDash, so
+# mom-regional-bgc.yaml supplies a synthetic marbl_ic_filepath and lets
+# CrocoDash generate the (all-zero) iron-flux files itself via
+# process_bgc_iron_forcing -- regenerate_data() stages all four under
+# bgc's testmods-declared literal filenames, same as the grid/topo/vgrid
+# files.
+bgc_detail_keys = ("RIV_FLUX_FILE",)
 
 for key in (*overrides, *tide_detail_keys, *chl_detail_keys, *bgc_detail_keys):
     text = re.sub(rf"(?m)^{re.escape(key)}\s*=.*\n?", "", text)
