@@ -1,0 +1,102 @@
+# CrocoDash regeneration config for the "mom-regional-bgc" testmods.
+# Same philosophy as mom-regional-base.yaml (read that one first) -- a fast,
+# fully synthetic/no-network smoke test, not a BGC science validation. Uses
+# the same shrunk 0.1deg/10x10/nk=10 Panama domain and DATM%NYF/SROF compset
+# swap via compset_override, for the same reasons (see that file's header).
+#
+# testlist_mom.xml registers this test under CR1850MARBL_JRA_GLOFAS, which
+# resolves (external MOM_interface repo, config_compsets.xml) to
+# 1850_DATM%JRA_SLND_SICE_MOM6%REGIONAL%MARBL-BIO_DROF%GLOFAS_SGLC_SWAV --
+# compset_override below swaps in the NYF/SROF equivalent with MARBL-BIO
+# still active: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL%MARBL-BIO_SROF_SGLC_SWAV.
+#
+# REFERENCE_OCEAN (this config's forcing product, same as base) has no
+# marbl_var_names -- it can't supply real MARBL OBC boundary tracers or IC
+# content (CrocoDash's forcing_configurations.py only defines
+# marbl_var_names on CESM_POP_OUTPUT/CESM_MOM_OUTPUT, both of which need
+# real external data). So this test deliberately does NOT exercise BGC
+# forcing content -- it only checks that a MARBL-BIO-enabled case actually
+# builds and runs. The container_smoke testmods (shared with base) strips
+# every BGC-specific user_nl_mom entry the bgc testmods sets (river-nutrient
+# flux, iron-flux files, and all per-tracer OBC_DATA_<tracer> lines) so
+# MOM6/MARBL falls back to its own internal tracer initialization instead
+# of trying to read data this regen never produces.
+
+crocodash:
+  grid:
+    resolution: 0.1
+    xstart: 278.0
+    lenx: 1.0
+    ystart: 7.0
+    leny: 1.0
+    name: panama1
+
+  topo:
+    min_depth: 9.5
+    source:
+      type: flat
+      depth: 1000.0
+
+  vgrid:
+    type: hyperbolic
+    nk: 10
+    ratio: 20.0
+
+  case:
+    cesmroot: /workspace/CESM
+    caseroot: /workspace/regional_test_case
+    inputdir: /workspace/regional_test_inputdir
+    compset: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL%MARBL-BIO_SROF_SGLC_SWAV
+    atm_grid_name: T62
+    machine: ubuntu-latest
+    project: PROJ123
+
+  forcings:
+    date_range: ["2000-01-01 00:00:00", "2000-01-05 00:00:00"]
+    product_name: reference_ocean
+    function_name: get_reference_ocean_data
+    # No BGC-specific args (no marbl_ic_filepath / iron-forcing / river-
+    # nutrients args) -- forcing_configurations' BGC configurators stay
+    # inactive, same spirit as base leaving tides/chl unconfigured.
+
+compset_override: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL%MARBL-BIO_SROF_SGLC_SWAV
+
+# Where regenerated files land. mom/regional/bgc's user_nl_mom (external
+# MOM_interface repo) references this domain's grid/topo/vgrid/mesh files
+# under a DIFFERENT hash suffix ("_5490e0") than base's own testmods
+# ("_352fd1") -- these are two independently-generated static fixtures, so
+# the destination names below deliberately differ from mom-regional-base.yaml.
+staging:
+  din_loc_root_subdir: ocn/mom/croc/testing_data/panama_bgc
+  rename_globs:
+    - glob: "ocean_hgrid_*.nc"
+      dest: ocean_hgrid_panama1_5490e0.nc
+    - glob: "ocean_topog_*.nc"
+      dest: ocean_topog_panama1_5490e0.nc
+    - glob: "ocean_vgrid_*.nc"
+      dest: ocean_vgrid_panama1_5490e0.nc
+    - glob: "ESMF_mesh_*.nc"
+      dest: ESMF_mesh_panama1_5490e0.nc
+    # Same phantom-default trick mom-regional-base.yaml needs for
+    # ALE_COORDINATE_CONFIG's MOM_input.yaml default (vgrid_65L_20200626.nc,
+    # gated on $MOM6_VERTICAL_GRID=zstar_65L) -- check_input_data validates
+    # that default's existence independent of any user_nl_mom override.
+    - glob: "ocean_vgrid_*.nc"
+      dest: vgrid_65L_20200626.nc
+    # MOM_input.yaml's default for MARBL_TRACERS_IC_FILE (gated on
+    # $MARBL_CONFIG=="latest+4p2z", the default for any MARBL-BIO compset --
+    # not grid-gated like the iron-flux files below) is checked the same
+    # way regardless of override. Not real ecosys IC content -- init_tracers
+    # only has temp/salt -- but MARBL_TRACERS_IC_FILE is stripped from
+    # user_nl_mom by container_smoke's shell_commands, so MOM6 never
+    # actually opens this file; it only needs to exist for check_input_data.
+    - glob: "init_tracers.nc"
+      dest: ecosys_jan_IC_omip_latlon_1x1_180W_c231221.nc
+  copy_as_is:
+    - forcing_obc_segment_001.nc
+    - forcing_obc_segment_002.nc
+    - forcing_obc_segment_003.nc
+    - forcing_obc_segment_004.nc
+    - init_eta.nc
+    - init_tracers.nc
+    - init_vel.nc
