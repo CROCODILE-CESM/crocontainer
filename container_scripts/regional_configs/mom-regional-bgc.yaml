@@ -119,7 +119,7 @@ synthetic_marbl_ic:
 # ("_352fd1") -- these are two independently-generated static fixtures, so
 # the destination names below deliberately differ from mom-regional-base.yaml.
 staging:
-  din_loc_root_subdir: ocn/mom/croc/testing_data/panama_bgc
+  din_loc_root_subdir: ocn/mom/croc/testing_data/panama-bgc
   rename_globs:
     - glob: "ocean_hgrid_*.nc"
       dest: ocean_hgrid_panama1_5490e0.nc
