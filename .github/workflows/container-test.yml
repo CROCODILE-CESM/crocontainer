@@ -117,12 +117,14 @@ jobs:
           # testmods assume) applied at CI runtime, without needing a PR to
           # the external CROCODILE-CESM/CESM fork.
           #
-          # case.py is mounted for the same reason -- CrocoDash is installed
-          # editable (pip install -e), so overlaying this one file picks up
-          # CROCODILE-CESM/CrocoDash#272's fix (custom multi-modifier
-          # compsets, e.g. MOM6%REGIONAL%MARBL-BIO) before that PR merges
-          # and a new image gets built with it baked in. Safe to remove
-          # once #272 merges and build.yml republishes latest-amd64.
+          # case.py and reference.py are mounted for the same reason --
+          # CrocoDash is installed editable (pip install -e), so overlaying
+          # these two files picks up CROCODILE-CESM/CrocoDash#272's fix
+          # (custom multi-modifier compsets, e.g. MOM6%REGIONAL%MARBL-BIO)
+          # and #273's fix (REFERENCE_OCEAN MARBL tracer support) before
+          # those PRs merge and a new image gets built with them baked in.
+          # Safe to remove once #272 and #273 merge and build.yml republishes
+          # latest-amd64.
           podman run --rm --platform linux/amd64 \
             -v "/mnt/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "/mnt/cesm_scratch:/root/cesm/scratch" \
@@ -130,6 +132,7 @@ jobs:
             -v "${{ github.workspace }}/container_scripts/regional_configs:/workspace/regional_configs" \
             -v "${{ github.workspace }}/container_scripts/testmods_overrides/mom/regional/container_smoke:/workspace/CESM/components/mom/cime_config/testdefs/testmods_dirs/mom/regional/container_smoke" \
             -v "${{ github.workspace }}/CrocoDash/CrocoDash/case.py:/workspace/CrocoDash/CrocoDash/case.py" \
+            -v "${{ github.workspace }}/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py:/workspace/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py" \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             conda run -n CrocoDash python /workspace/run_regional_test.py "${{ matrix.test }}"
 
