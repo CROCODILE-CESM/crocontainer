@@ -34,6 +34,86 @@ jobs:
               crocodash create --help 2>&1 | grep -q -- '--configure-only' && echo 'crocodash create --configure-only OK'
             "
 
+  domain-sweep:
+    name: Domain sweep
+    # Deliberately not gated to workflow_dispatch/schedule like regional-test
+    # below: this never builds or runs MOM6, so it is minutes rather than
+    # hours, and a seam or polar regression in CrocoDash's forcing pipeline is
+    # exactly the kind of thing worth catching on the PR that causes it.
+    # No NYF inputdata either -- nothing here reads atm forcing.
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-podman
+
+      - name: Create scratch directory on /mnt
+        # Same reasoning as regional-test: /mnt is the runner's large temp
+        # disk, github.workspace sits on the small root partition.
+        run: |
+          sudo mkdir -p /mnt/domain_sweep
+          sudo chown runner:runner /mnt/domain_sweep
+
+      - name: Sweep the CrocoDash domain catalog
+        run: |
+          # The catalog and the grid.type dispatch both come from
+          # CROCODILE-CESM/CrocoDash#274, so tests/fixtures/domains.py and
+          # recipe.py are mounted over the image's editable install for the
+          # same reason case.py and reference.py are in regional-test below --
+          # to run the submodule's version rather than whatever was baked into
+          # the published image. All four mounts can go once their PRs merge
+          # and build.yml republishes latest-amd64.
+          podman run --rm --platform linux/amd64 \
+            -v "/mnt/domain_sweep:/workspace/domain_sweep" \
+            -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
+            -v "${{ github.workspace }}/CrocoDash/tests:/workspace/CrocoDash/tests" \
+            -v "${{ github.workspace }}/CrocoDash/CrocoDash/recipe.py:/workspace/CrocoDash/CrocoDash/recipe.py" \
+            -v "${{ github.workspace }}/CrocoDash/CrocoDash/case.py:/workspace/CrocoDash/CrocoDash/case.py" \
+            -v "${{ github.workspace }}/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py:/workspace/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py" \
+            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            conda run -n CrocoDash --no-capture-output \
+              python /workspace/run_domain_sweep.py \
+                --json-summary /workspace/domain_sweep/summary.json
+
+      - name: Publish results table
+        # podman runs as root, so anything it wrote under /mnt is root-owned
+        # and unreadable to the unprivileged user upload-artifact runs as --
+        # hence the chown before both this and the upload below.
+        if: always()
+        run: |
+          sudo chown -R runner:runner /mnt/domain_sweep || true
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          path = pathlib.Path("/mnt/domain_sweep/summary.json")
+          if not path.exists():
+              print("The sweep did not get far enough to write a summary.")
+              raise SystemExit
+          results = json.loads(path.read_text())
+          print("| domain | result | seconds |")
+          print("|---|---|---|")
+          for r in results:
+              status = "ok" if not r["problems"] else "**FAIL**"
+              print(f"| {r['key']} | {status} | {r['seconds']:.0f} |")
+          for r in results:
+              if r["problems"]:
+                  print(f"\n### {r['key']}\n")
+                  for problem in r["problems"]:
+                      print(f"```\n{problem}\n```")
+          EOF
+
+      - name: Upload domain sweep summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-sweep-summary-${{ github.run_id }}
+          path: /mnt/domain_sweep/summary.json
+          if-no-files-found: warn
+
   discover-regional-tests:
     name: Discover regional tests
     # Just parses testlist_mom.xml/config_compsets.xml out of the image --
