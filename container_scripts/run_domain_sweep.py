@@ -68,7 +68,27 @@ EXPECTED_OUTPUTS = [
 ]
 
 
+CATALOG_RELPATH = "tests/fixtures/domains.py"
+
+
 def load_catalog():
+    """Import the DomainSpec catalog out of CrocoDash's own test fixtures.
+
+    Imported rather than duplicated so there is a single source of truth for
+    what the domains are. That does couple this script to the CrocoDash
+    checkout it is pointed at: the catalog arrives with CROCODILE-CESM/
+    CrocoDash#274, so a submodule pointer older than that has a tests/
+    directory without it.
+    """
+    catalog = CROCODASH_ROOT / CATALOG_RELPATH
+    if not catalog.exists():
+        sys.exit(
+            f"No domain catalog at {catalog}.\n"
+            "The sweep reads CrocoDash's tests/fixtures/domains.py, which "
+            "arrives with CROCODILE-CESM/CrocoDash#274. Point the CrocoDash "
+            "submodule at a commit that includes it."
+        )
+
     sys.path.insert(0, str(CROCODASH_ROOT))
     from tests.fixtures.domains import DOMAINS
 

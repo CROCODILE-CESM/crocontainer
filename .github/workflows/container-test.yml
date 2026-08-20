@@ -59,7 +59,22 @@ jobs:
           sudo mkdir -p /mnt/domain_sweep
           sudo chown runner:runner /mnt/domain_sweep
 
+      - name: Check the CrocoDash submodule carries the domain catalog
+        # tests/fixtures/domains.py arrives with CrocoDash#274. Until the
+        # submodule pointer includes it there is nothing to sweep, and the job
+        # should say so plainly rather than fail on an import error.
+        id: catalog
+        run: |
+          if [ -f CrocoDash/tests/fixtures/domains.py ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "CrocoDash submodule ($(git -C CrocoDash rev-parse --short HEAD)) predates CrocoDash#274 — skipping the sweep." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Sweep the CrocoDash domain catalog
+        if: steps.catalog.outputs.present == 'true'
         run: |
           # The catalog and the grid.type dispatch both come from
           # CROCODILE-CESM/CrocoDash#274, so tests/fixtures/domains.py and
@@ -81,6 +96,7 @@ jobs:
                 --json-summary /workspace/domain_sweep/summary.json
 
       - name: Publish results table
+        if: always() && steps.catalog.outputs.present == 'true'
         # podman runs as root, so anything it wrote under /mnt is root-owned
         # and unreadable to the unprivileged user upload-artifact runs as --
         # hence the chown before both this and the upload below.
@@ -107,7 +123,7 @@ jobs:
           EOF
 
       - name: Upload domain sweep summary
-        if: always()
+        if: always() && steps.catalog.outputs.present == 'true' 
         uses: actions/upload-artifact@v4
         with:
           name: domain-sweep-summary-${{ github.run_id }}
