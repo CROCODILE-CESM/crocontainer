@@ -100,7 +100,6 @@ jobs:
         # podman runs as root, so anything it wrote under /mnt is root-owned
         # and unreadable to the unprivileged user upload-artifact runs as --
         # hence the chown before both this and the upload below.
-        if: always()
         run: |
           sudo chown -R runner:runner /mnt/domain_sweep || true
           python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
