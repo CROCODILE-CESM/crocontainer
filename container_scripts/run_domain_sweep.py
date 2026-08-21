@@ -28,7 +28,9 @@ Usage:
 
 import argparse
 import json
+import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -69,6 +71,13 @@ EXPECTED_OUTPUTS = [
 
 
 CATALOG_RELPATH = "tests/fixtures/domains.py"
+
+# A domain that has not finished in this long is treated as hung and killed.
+# Generous next to the ~12s a healthy domain takes, so this can only fire on a
+# genuine wedge -- but bounded, because without it one hung domain consumes the
+# whole job: CROCODILE-CESM/crocontainer#7's first full run spent 58 of its 60
+# minutes stuck on western_hemi_neg and the remaining 12 domains never ran.
+DOMAIN_TIMEOUT_S = 600
 
 
 def load_catalog():
@@ -210,13 +219,36 @@ def run_domain(spec, keep):
     with open(config_path, "w") as f:
         yaml.safe_dump(build_config(spec, caseroot, inputdir), f, sort_keys=False)
 
+    # PYTHONFAULTHANDLER turns the SIGABRT below into a Python traceback from
+    # every thread. Without it a hung domain dies mute and all we learn is that
+    # it took too long, which is what the first full run of this sweep got.
+    env = dict(os.environ, PYTHONFAULTHANDLER="1")
+    log_path = domain_dir / "crocodash.log"
     start = time.time()
-    proc = subprocess.run(
-        ["crocodash", "create", "--config", str(config_path), "--override"],
-        capture_output=True,
-        text=True,
-    )
+    with open(log_path, "w") as log:
+        proc = subprocess.Popen(
+            ["crocodash", "create", "--config", str(config_path), "--override"],
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+        )
+        try:
+            proc.wait(timeout=DOMAIN_TIMEOUT_S)
+            timed_out = False
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            # SIGABRT rather than SIGKILL: with faulthandler armed the process
+            # dumps where it is stuck on the way out, which is the only thing
+            # that makes a hang diagnosable from CI logs alone.
+            proc.send_signal(signal.SIGABRT)
+            try:
+                proc.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
     elapsed = time.time() - start
+    tail = "\n".join(log_path.read_text().splitlines()[-40:])
 
     # Both the exit code and the outputs are checked, and the outputs matter
     # more: `crocodash create` has been observed to print a "Case Configuration
@@ -224,8 +256,12 @@ def run_domain(spec, keep):
     # create_newcase never runs), leaving configure_forcings' config.json
     # behind but no forcing at all. Trusting the exit code alone would call
     # that a pass.
-    if proc.returncode != 0:
-        tail = "\n".join((proc.stdout + proc.stderr).splitlines()[-40:])
+    if timed_out:
+        problems = [
+            f"crocodash create still running after {DOMAIN_TIMEOUT_S}s "
+            f"-- killed. Stack at the time of the kill:\n{tail}"
+        ]
+    elif proc.returncode != 0:
         problems = [f"crocodash create exited {proc.returncode}:\n{tail}"]
     else:
         problems = check_outputs(inputdir)
@@ -272,14 +308,18 @@ def main():
         else:
             print(f"    ok ({result['seconds']:.0f}s)", flush=True)
 
+        # Rewritten after every domain, not once at the end. A sweep that dies
+        # partway -- the CI job hitting its own wall-clock limit, most likely --
+        # still leaves a summary for the domains that did run, instead of the
+        # nothing-at-all the end-of-run write produced.
+        if args.json_summary:
+            with open(args.json_summary, "w") as f:
+                json.dump(results, f, indent=2)
+
     failed = [r for r in results if r["problems"]]
     print(f"\n{len(results) - len(failed)}/{len(results)} domains passed")
     if failed:
         print("Failed: " + ", ".join(r["key"] for r in failed))
-
-    if args.json_summary:
-        with open(args.json_summary, "w") as f:
-            json.dump(results, f, indent=2)
 
     return 1 if failed else 0
 
