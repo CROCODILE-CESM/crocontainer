@@ -394,5 +394,6 @@ Two GitHub Actions workflows handle CI/CD:
 
 **Container Tests** (`.github/workflows/container-test.yml`): validates the image on every push, weekly, and via manual dispatch. Three jobs, in sequence:
 - **`smoke-test`**: pulls the image and verifies CrocoDash imports and CESM files are present
-- **`discover-regional-tests`** (scheduled/manual only): parses `testlist_mom.xml`/`config_compsets.xml` out of the image for every `MOM6%REGIONAL` test, emitting a JSON list for the next job's matrix -- see `container_scripts/discover_regional_tests.py`
-- **`regional-test`** (scheduled/manual only): one matrix job per discovered test -- regenerates that test's CrocoDash input data fresh (`container_scripts/run_regional_test.py` + `regional_configs/*.yaml`) and runs it via CIME's `create_test`, with cached NYF inputdata to skip live downloads
+- **`domain-mom6-build`** (scheduled/manual only): builds CESM+MOM6 once per run and uploads it as a run-scoped artifact -- the executable is domain-independent (`MOM6_MEMORY_MODE=dynamic_symmetric`), so every domain job below shares this one compile. Built fresh each run rather than cached, so build regressions still surface
+- **`domain-mom6-run`** (scheduled/manual only): one matrix job per selected domain -- restores that build and actually runs MOM6 on the domain, uploading `RUNDIR` as an artifact. Replaced a CIME `create_test` suite that checked the same thing on one hardcoded grid; adding a domain here is a row in CrocoDash's `tests/fixtures/domains.py`, not an upstream `testlist_mom.xml` entry plus testmods dir plus image rebuild
+- **`domain-mom6-debug`** (scheduled/manual only): the same, on one domain, built with `DEBUG=TRUE` -- bounds checks and FP traps that the optimised build runs straight past

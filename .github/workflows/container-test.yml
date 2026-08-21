@@ -11,7 +11,7 @@ on:
 jobs:
   smoke-test:
     name: Smoke test
-    # No GLADE/NYF dependency here, unlike regional-test -- stays on
+    # No GLADE/NYF dependency here -- stays on
     # GH-hosted so it isn't blocked by the self-hosted runner's queue/uptime.
     runs-on: ubuntu-latest
     steps:
@@ -36,9 +36,9 @@ jobs:
 
   discover-domains:
     name: Discover domains
-    # Mirrors discover-regional-tests below: the matrix is built from the
-    # image rather than hardcoded here, so adding or xfailing a domain in
-    # CrocoDash needs no crocontainer-side edit.
+    # The matrix is built from the image rather than hardcoded here, so
+    # adding or xfailing a domain in CrocoDash needs no crocontainer-side
+    # edit.
     runs-on: ubuntu-latest
     needs: smoke-test
     outputs:
@@ -76,7 +76,7 @@ jobs:
 
   domain-sweep:
     name: ${{ matrix.domain }}
-    # Deliberately not gated to workflow_dispatch/schedule like regional-test
+    # Deliberately not gated to workflow_dispatch/schedule like the MOM6 jobs
     # below: this never builds or runs MOM6, so it is minutes rather than
     # hours, and a seam or polar regression in CrocoDash's forcing pipeline is
     # exactly the kind of thing worth catching on the PR that causes it.
@@ -108,8 +108,8 @@ jobs:
       - uses: ./.github/actions/setup-podman
 
       - name: Create scratch directory on /mnt
-        # Same reasoning as regional-test: /mnt is the runner's large temp
-        # disk, github.workspace sits on the small root partition.
+        # /mnt is the runner's large temp disk; github.workspace sits on the
+        # small root partition.
         run: |
           sudo mkdir -p /mnt/domain_sweep
           sudo chown runner:runner /mnt/domain_sweep
@@ -259,13 +259,13 @@ jobs:
     # Actually runs MOM6 on a handful of catalog domains, rather than stopping
     # at "did CrocoDash produce plausible forcing" like domain-sweep does.
     #
-    # Deliberately NOT routed through create_test/discover-regional-tests. That
-    # path reads testlist_mom.xml and config_compsets.xml out of the MOM
-    # interface repo, and its regional testmods hardcode NIGLOBAL/NJGLOBAL and
-    # an ocean_hgrid filename -- so every domain added there needs an upstream
-    # entry, its own testmods dir, and an image rebuild before CI can see it.
-    # run_case.sh takes a CrocoDash YAML directly, which is all this needs: the
-    # sweep already proved the forcing is good, so what is left is whether MOM6
+    # This replaced a CIME create_test suite that ran the same check on a
+    # single hardcoded grid. That path read testlist_mom.xml out of the MOM
+    # interface repo and its testmods hardcoded NIGLOBAL/NJGLOBAL and an
+    # ocean_hgrid filename, so every domain needed an upstream entry, its own
+    # testmods dir, and an image rebuild before CI could see it. run_case.sh
+    # takes a CrocoDash YAML directly, which is all this needs: the sweep
+    # already proved the forcing is good, so what is left is whether MOM6
     # accepts the grid and runs.
     runs-on: ubuntu-latest
     needs: domain-mom6-build
@@ -341,45 +341,28 @@ jobs:
           path: runout/run-${{ matrix.domain }}.tgz
           if-no-files-found: warn
 
-  discover-regional-tests:
-    name: Discover regional tests
-    # Just parses testlist_mom.xml/config_compsets.xml out of the image --
-    # no GLADE/NYF dependency, same reasoning as smoke-test above.
+  domain-mom6-debug:
+    name: MOM6 debug (${{ matrix.domain }})
+    # A debug build -- -fcheck=bounds and FP traps -- on one domain. This is
+    # the coverage the old SMS_D create_test jobs provided and the optimised
+    # domain-mom6-run jobs do not: an out-of-bounds access or a NaN that an
+    # optimised build runs straight past. A regional grid with open boundaries
+    # is exactly where those hide, so it is worth one job.
+    #
+    # Self-contained rather than sharing domain-mom6-build's artifact: a debug
+    # build is a different executable, so it cannot reuse the optimised one.
     runs-on: ubuntu-latest
     needs: smoke-test
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    outputs:
-      tests: ${{ steps.discover.outputs.tests }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-podman
-
-      - name: List regional (MOM6%REGIONAL) tests
-        id: discover
-        run: |
-          # testlist_mom.xml/config_compsets.xml are the MOM interface's own
-          # source of truth -- any test defined there against a %REGIONAL
-          # compset is picked up automatically, no crocontainer-side
-          # annotation needed. See discover_regional_tests.py.
-          TESTS=$(podman run --rm --platform linux/amd64 \
-            -v "${{ github.workspace }}/container_scripts/discover_regional_tests.py:/workspace/discover_regional_tests.py" \
-            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
-            python /workspace/discover_regional_tests.py)
-          echo "Discovered tests: ${TESTS}"
-          echo "tests=${TESTS}" >> "$GITHUB_OUTPUT"
-
-  regional-test:
-    name: ${{ matrix.test }}
-    runs-on: ubuntu-latest
-    needs: discover-regional-tests
-    if: needs.discover-regional-tests.outputs.tests != '[]'
     timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
-        test: ${{ fromJson(needs.discover-regional-tests.outputs.tests) }}
+        # One domain, deliberately the least regular one: a polar projection is
+        # the likeliest to surface an indexing bug. Add entries here if the
+        # extra build time is ever worth it.
+        domain:
+          - arctic_cap
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -388,78 +371,40 @@ jobs:
 
       - uses: ./.github/actions/setup-podman
 
-      - name: Create scratch/inputdata directories on /mnt
-        # /mnt (not the runner's small root partition, already the reason
-        # podman's own storage above is redirected there) -- github.workspace
-        # sits on the small root partition, while /mnt is the much larger
-        # temp disk podman's own image layers are already redirected to.
+      - name: Emit the CrocoDash config for ${{ matrix.domain }}
         run: |
-          sudo mkdir -p /mnt/cesm_scratch /mnt/cesm_nyf_inputdata
-          sudo chown runner:runner /mnt/cesm_scratch /mnt/cesm_nyf_inputdata
-
-      - name: Cache NYF inputdata
-        uses: actions/cache@v4
-        id: nyf-cache
-        with:
-          path: /mnt/cesm_nyf_inputdata
-          key: nyf-inputdata-${{ hashFiles('scripts/nyf_inputdata_list.txt') }}
-
-      - name: Download NYF inputdata
-        if: steps.nyf-cache.outputs.cache-hit != 'true'
-        run: bash scripts/download_nyf_inputdata.sh /mnt/cesm_nyf_inputdata 8
-
-      - name: Sanitize test name for artifact naming
-        id: name
-        run: echo "safe=$(echo '${{ matrix.test }}' | tr -c 'A-Za-z0-9_-' '_')" >> "$GITHUB_OUTPUT"
-
-      - name: Regenerate CrocoDash data and run create_test
-        run: |
-          # Mounts this repo's own copies of the regen/entrypoint scripts and
-          # regional_configs/ so CI runs the current PR's versions rather
-          # than whatever was baked into the already-published image. Also
-          # mounts testmods_overrides/mom/regional/container_smoke straight
-          # into the container's baked-in CESM checkout's testmods_dirs --
-          # this is the PE-layout fix (NTASKS=1, since ubuntu-latest caps
-          # MAX_MPITASKS_PER_NODE well below what the Derecho-sized regional
-          # testmods assume) applied at CI runtime, without needing a PR to
-          # the external CROCODILE-CESM/CESM fork.
-          #
-          # case.py and reference.py are mounted for the same reason --
-          # CrocoDash is installed editable (pip install -e), so overlaying
-          # these two files picks up CROCODILE-CESM/CrocoDash#272's fix
-          # (custom multi-modifier compsets, e.g. MOM6%REGIONAL%MARBL-BIO)
-          # and #273's fix (REFERENCE_OCEAN MARBL tracer support) before
-          # those PRs merge and a new image gets built with them baked in.
-          # Safe to remove once #272 and #273 merge and build.yml republishes
-          # latest-amd64.
           podman run --rm --platform linux/amd64 \
-            -v "/mnt/cesm_nyf_inputdata:/root/cesm/inputdata" \
-            -v "/mnt/cesm_scratch:/root/cesm/scratch" \
-            -v "${{ github.workspace }}/container_scripts/run_regional_test.py:/workspace/run_regional_test.py" \
-            -v "${{ github.workspace }}/container_scripts/regional_configs:/workspace/regional_configs" \
-            -v "${{ github.workspace }}/container_scripts/testmods_overrides/mom/regional/container_smoke:/workspace/CESM/components/mom/cime_config/testdefs/testmods_dirs/mom/regional/container_smoke" \
-            -v "${{ github.workspace }}/CrocoDash/CrocoDash/case.py:/workspace/CrocoDash/CrocoDash/case.py" \
-            -v "${{ github.workspace }}/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py:/workspace/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py" \
+            -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
+            -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -e CROCODASH_ROOT=/workspace/crocodash_src \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
-            conda run -n CrocoDash python /workspace/run_regional_test.py "${{ matrix.test }}"
+            conda run -n CrocoDash --no-capture-output \
+              python /workspace/run_domain_sweep.py \
+                --emit-config "${{ matrix.domain }}" > case_config.yaml
 
-      - name: Print run logs on failure
-        # RUNDIR resolves to $CIME_OUTPUT_ROOT/$CASE/run -- CIME_OUTPUT_ROOT
-        # defaults to the ubuntu-latest machine's plain scratch root, not
-        # --test-root, so actual run logs (cesm.log etc) land in a sibling
-        # tree next to tests/regional/, not under it. sudo cat straight into
-        # the job log instead of uploading as an artifact -- podman runs the
-        # container as root, so these are root-owned on the host, and even
-        # `sudo chmod -R` beforehand didn't make them readable to the
-        # unprivileged runner user actions/upload-artifact runs as.
-        if: failure()
+      - name: Build and run MOM6 with DEBUG=TRUE
         run: |
-          sudo find /mnt/cesm_scratch -path '*/run/*' -name '*.log*' -print -exec sudo cat {} \;
+          mkdir -p "${{ github.workspace }}/runout"
+          podman run --rm --platform linux/amd64 \
+            -v "${{ github.workspace }}/case_config.yaml:/workspace/case_config.yaml" \
+            -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
+            -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -v "${{ github.workspace }}/runout:/workspace/runout" \
+            -e CROCODASH_ROOT=/workspace/crocodash_src \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
+            -e CROC_DEBUG_BUILD=1 \
+            -e CROC_RUN_ARCHIVE=/workspace/runout/run-debug-${{ matrix.domain }}.tgz \
+            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            /bin/bash /workspace/run_case.sh
 
-      - name: Upload test results
+      - name: Collect debug run output
         if: always()
-        uses: actions/upload-artifact@v4
+        run: sudo chown -R runner:runner "${{ github.workspace }}/runout" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: cime-test-${{ steps.name.outputs.safe }}-${{ github.run_id }}
-          path: /mnt/cesm_scratch/tests/regional
+          name: mom6-run-debug-${{ matrix.domain }}-${{ github.run_id }}
+          path: runout/run-debug-${{ matrix.domain }}.tgz
           if-no-files-found: warn

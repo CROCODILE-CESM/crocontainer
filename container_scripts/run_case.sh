@@ -111,6 +111,15 @@ fi
 #                            otherwise, a build tree to restore instead of compiling
 #
 # Neither is set in normal use, so the default path is unchanged: build, run.
+# Debug builds (-fcheck=bounds, FP traps) catch out-of-bounds access and NaNs
+# that an optimised build runs straight past -- the failure mode a regional
+# grid with open boundaries is most likely to hide. Off by default: it is
+# slower to build and to run.
+if [[ -n "${CROC_DEBUG_BUILD:-}" ]]; then
+    ./xmlchange DEBUG=TRUE
+    echo "Building with DEBUG=TRUE"
+fi
+
 if [[ -n "${CROC_BUILD_ONLY:-}" ]]; then
     ./case.build
     EXEROOT=$(./xmlquery EXEROOT --value)
