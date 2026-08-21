@@ -143,6 +143,29 @@ else
     ./case.build
 fi
 
+# `case.submit --no-batch` exits 0 even when the model died: CIME writes
+# "case.run error" / "RUN FAIL" into CaseStatus and then logs "case.submit
+# success" on the next line. Trusting its exit status makes a blown-up run
+# indistinguishable from a good one -- an arctic_cap case that hit "FATAL:
+# ... extreme surface values" and produced no restart still reported success.
+# CaseStatus is the actual record of what happened, so read that.
+check_run_status() {
+    if [[ ! -f CaseStatus ]]; then
+        echo "No CaseStatus -- the run never started" >&2
+        return 1
+    fi
+    if grep -qE "case\.run error|model execution error|RUN FAIL" CaseStatus; then
+        echo "MOM6 run FAILED (see CaseStatus and cesm.log):" >&2
+        grep -E "case\.run error|model execution error|RUN FAIL" CaseStatus >&2
+        return 1
+    fi
+    if ! grep -q "case\.run success" CaseStatus; then
+        echo "CaseStatus records no 'case.run success' -- run did not complete" >&2
+        return 1
+    fi
+    return 0
+}
+
 # Optionally keep what the run produced. CI uploads this as an artifact, so a
 # failed run is inspectable after the fact instead of only through whatever
 # reached stdout -- MOM6's own diagnosis usually lands in ocn.log/cesm.log
@@ -155,6 +178,8 @@ fi
 if [[ -n "${CROC_RUN_ARCHIVE:-}" ]]; then
     rc=0
     ./case.submit --no-batch || rc=$?
+    # Checked even when submit exited 0 -- see check_run_status above.
+    if [[ $rc -eq 0 ]]; then check_run_status || rc=$?; fi
 
     RUNDIR=$(./xmlquery RUNDIR --value)
     STAGE=$(mktemp -d)
@@ -172,3 +197,4 @@ if [[ -n "${CROC_RUN_ARCHIVE:-}" ]]; then
 fi
 
 ./case.submit --no-batch
+check_run_status
