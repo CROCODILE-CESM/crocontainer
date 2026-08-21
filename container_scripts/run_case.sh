@@ -134,4 +134,32 @@ else
     ./case.build
 fi
 
+# Optionally keep what the run produced. CI uploads this as an artifact, so a
+# failed run is inspectable after the fact instead of only through whatever
+# reached stdout -- MOM6's own diagnosis usually lands in ocn.log/cesm.log
+# rather than on the console.
+#
+#   CROC_RUN_ARCHIVE=path    tar RUNDIR (plus a few caseroot files) here
+#
+# Written whether the run succeeds or fails, and the run's exit status is
+# preserved, because the failing case is the one worth looking at.
+if [[ -n "${CROC_RUN_ARCHIVE:-}" ]]; then
+    rc=0
+    ./case.submit --no-batch || rc=$?
+
+    RUNDIR=$(./xmlquery RUNDIR --value)
+    STAGE=$(mktemp -d)
+    mkdir -p "${STAGE}/rundir" "${STAGE}/caseroot"
+    cp -a "${RUNDIR}/." "${STAGE}/rundir/" 2>/dev/null || true
+    # The case-side files needed to make sense of the logs: what MOM6 was
+    # actually told to do, and how far the case got.
+    for f in user_nl_mom CaseStatus CaseDocs/MOM_input CaseDocs/MOM_override; do
+        [[ -e "$f" ]] && cp -a "$f" "${STAGE}/caseroot/" 2>/dev/null || true
+    done
+    tar czf "${CROC_RUN_ARCHIVE}" -C "${STAGE}" . || true
+    rm -rf "${STAGE}"
+    echo "Saved run output to ${CROC_RUN_ARCHIVE} (exit ${rc})"
+    exit $rc
+fi
+
 ./case.submit --no-batch
