@@ -7,6 +7,18 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 8 * * 2'  # Tuesday 8am UTC
+  workflow_call:
+    inputs:
+      image:
+        description: Container image to test. Defaults to the published latest-amd64.
+        type: string
+        required: false
+
+env:
+  # Every podman invocation below pulls this. Overridable through workflow_call
+  # so crocodash-main.yml can gate a candidate image before it is published --
+  # nothing else should need to set it.
+  IMAGE: ${{ inputs.image || 'ghcr.io/crocodile-cesm/crocontainer:latest-amd64' }}
 
 jobs:
   domain-mom6-build:
@@ -38,7 +50,7 @@ jobs:
             -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
             -e CROCODASH_ROOT=/workspace/crocodash_src \
             -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
-            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            "$IMAGE" \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py \
                 --emit-config equator_prime_meridian > case_config.yaml
@@ -55,7 +67,7 @@ jobs:
             -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
             -e CROC_BUILD_ONLY=1 \
             -e CROC_BUILD_ARCHIVE=/workspace/buildout/build.tgz \
-            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            "$IMAGE" \
             /bin/bash /workspace/run_case.sh
           sudo chown -R runner:runner "${{ github.workspace }}/buildout"
           ls -lh "${{ github.workspace }}/buildout"
@@ -120,7 +132,7 @@ jobs:
             -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
             -e CROCODASH_ROOT=/workspace/crocodash_src \
             -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
-            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            "$IMAGE" \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py \
                 --emit-config "${{ matrix.domain }}" > case_config.yaml
@@ -141,7 +153,7 @@ jobs:
             -v "${{ github.workspace }}/runout:/workspace/runout" \
             -e CROC_BUILD_ARCHIVE=/workspace/build.tgz \
             -e CROC_RUN_ARCHIVE=/workspace/runout/run-${{ matrix.domain }}.tgz \
-            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            "$IMAGE" \
             /bin/bash /workspace/run_case.sh
 
       - name: Collect ${{ matrix.domain }} run output
@@ -195,7 +207,7 @@ jobs:
             -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
             -e CROCODASH_ROOT=/workspace/crocodash_src \
             -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
-            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            "$IMAGE" \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py \
                 --emit-config "${{ matrix.domain }}" > case_config.yaml
@@ -212,7 +224,7 @@ jobs:
             -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
             -e CROC_DEBUG_BUILD=1 \
             -e CROC_RUN_ARCHIVE=/workspace/runout/run-debug-${{ matrix.domain }}.tgz \
-            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            "$IMAGE" \
             /bin/bash /workspace/run_case.sh
 
       - name: Collect debug run output
