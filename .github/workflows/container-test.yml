@@ -277,19 +277,27 @@ jobs:
         # Chosen, not discovered. The build above is domain-independent, so
         # this list is free to change without touching it.
         #
-        # arctic_cap is deliberately absent: MOM6 initializes on it cleanly
-        # (step 0 reports MaxCFL 0.28 and sane mass/salt/temp) but goes
-        # unstable on the first coupled step -- NaN SSH at i=1,j=1 on the
-        # boundary, then "FATAL: extreme surface values". That is very likely
-        # the test configuration rather than a CrocoDash bug: a polar cap with
-        # flat 1000m bathymetry, no land at all, and open boundaries on every
+        # arctic_cap is a KNOWN FAILURE, kept in deliberately so it stays
+        # visible. MOM6 initializes on it cleanly -- step 0 reports MaxCFL 0.28
+        # and sane mass/salt/temp -- then goes unstable on the first coupled
+        # step: NaN SSH at i=1,j=1 on the boundary, then "FATAL: extreme
+        # surface values", no restart and no history file. Very likely the test
+        # configuration rather than a CrocoDash bug, since a polar cap with
+        # flat 1000m bathymetry, no land at all and open boundaries on every
         # side including across the pole is not something anyone would
-        # integrate. The domain still runs in domain-sweep above, so its
-        # forcing pipeline stays covered; only the MOM6 run is skipped.
+        # integrate.
+        #
+        # Not wrapped in continue-on-error: that reports a failed job as green,
+        # which would hide it. It fails visibly instead, and cannot block a PR
+        # because these jobs only run on workflow_dispatch/schedule. Its
+        # artifact is still uploaded, so each run records how far it got --
+        # and if a future change ever makes it integrate, it turns green on its
+        # own rather than going unnoticed.
         domain:
           - nh_atlantic              # plain mid-latitude box, the easy case
           - equator_prime_meridian   # lat and lon both change sign
           - dateline_seam_360        # crosses the antimeridian
+          - arctic_cap               # KNOWN FAILURE -- see above
     steps:
       - name: Checkout
         uses: actions/checkout@v4
