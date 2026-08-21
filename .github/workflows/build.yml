@@ -53,9 +53,30 @@ jobs:
                 type=sha,prefix=sha-
                 type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Derive arch suffix
-        id: arch
-        run: echo "suffix=$(echo ${{ matrix.platform }} | cut -d/ -f2)" >> $GITHUB_OUTPUT
+      - name: Derive tags
+        id: tags
+        # latest-<arch> is what every consumer pulls -- CI here, crocontainer
+        # users, and the promotion step of any workflow that gates an image
+        # before publishing it. Only the default branch and release tags may
+        # move it. Previously it was pushed unconditionally, so dispatching
+        # this workflow from any feature branch republished the world.
+        # sha-<commit>-<arch> is always pushed, so a branch build is still
+        # fetchable by commit.
+        run: |
+          BASE="${REGISTRY}/${IMAGE_NAME}"
+          SUFFIX=$(echo "${{ matrix.platform }}" | cut -d/ -f2)
+          echo "suffix=${SUFFIX}" >> "$GITHUB_OUTPUT"
+          {
+            echo "list<<TAGS_EOF"
+            echo "${BASE}:sha-${{ github.sha }}-${SUFFIX}"
+            if [[ "${{ github.ref }}" == "refs/heads/main" \
+               || "${{ github.ref }}" == refs/tags/v* ]]; then
+              echo "${BASE}:latest-${SUFFIX}"
+            else
+              echo "Not the default branch or a release tag: skipping latest-${SUFFIX}." >&2
+            fi
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -66,9 +87,7 @@ jobs:
           push: true
           build-args: |
                 CESM_BRANCH=${{ env.CESM_BRANCH }}
-          tags: |
-                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.arch.outputs.suffix }}
-                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-${{ steps.arch.outputs.suffix }}
+          tags: ${{ steps.tags.outputs.list }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
@@ -76,6 +95,11 @@ jobs:
   # Merge into a single multi-arch manifest
   manifest:
     needs: build-and-push
+    # Gated for the same reason as the latest-<arch> tags above: this job reads
+    # latest-amd64/latest-arm64 and republishes `latest` from them. On a branch
+    # build those inputs were never pushed, so it would combine two stale images
+    # and re-tag them as current.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
