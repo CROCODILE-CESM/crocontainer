@@ -65,7 +65,9 @@ jobs:
           fi
           DOMAINS=$(podman run --rm --platform linux/amd64 \
             -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
-            -v "${{ github.workspace }}/CrocoDash/tests:/workspace/CrocoDash/tests" \
+            -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -e CROCODASH_ROOT=/workspace/crocodash_src \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6 \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py --list-domains)
@@ -114,23 +116,24 @@ jobs:
 
       - name: Sweep ${{ matrix.domain }}
         run: |
-          # The catalog and the grid.type dispatch both come from
-          # CROCODILE-CESM/CrocoDash#274, so tests/fixtures/domains.py and
-          # recipe.py are mounted over the image's editable install for the
-          # same reason case.py and reference.py are in regional-test below --
-          # to run the submodule's version rather than whatever was baked into
-          # the published image. extract_forcings/ joins them because the OBC
-          # write path is what this sweep actually exercises: without it the
-          # image's copy runs and any fix there goes untested. Every mount can
-          # go once their PRs merge and build.yml republishes latest-amd64.
+          # The whole CrocoDash checkout is injected and put ahead of the
+          # image's own copy on PYTHONPATH, rather than mounting individual
+          # files over it. Cherry-picking does not work here: the published
+          # image is rebuilt weekly from main, so its baked CrocoDash is at
+          # some older commit than the submodule, and mounting half of a
+          # refactor (extract_forcings/ from CrocoDash#265) over the other
+          # half (the image's forcing_configurations/) failed all 16 domains
+          # with KeyError: 'get_step_days'. One coherent tree, no guessing
+          # about what the image contains. The image still supplies the conda
+          # environment, CESM, and inputdata -- only the Python source is
+          # overridden. All of this can go once the stack merges and build.yml
+          # republishes latest-amd64.
           podman run --rm --platform linux/amd64 \
             -v "/mnt/domain_sweep:/workspace/domain_sweep" \
             -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
-            -v "${{ github.workspace }}/CrocoDash/tests:/workspace/CrocoDash/tests" \
-            -v "${{ github.workspace }}/CrocoDash/CrocoDash/recipe.py:/workspace/CrocoDash/CrocoDash/recipe.py" \
-            -v "${{ github.workspace }}/CrocoDash/CrocoDash/case.py:/workspace/CrocoDash/CrocoDash/case.py" \
-            -v "${{ github.workspace }}/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py:/workspace/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py" \
-            -v "${{ github.workspace }}/CrocoDash/CrocoDash/extract_forcings:/workspace/CrocoDash/CrocoDash/extract_forcings" \
+            -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -e CROCODASH_ROOT=/workspace/crocodash_src \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6 \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py \

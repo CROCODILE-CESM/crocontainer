@@ -38,9 +38,10 @@ from pathlib import Path
 
 import yaml
 
-# CrocoDash is installed editable from here, so its tests/ package -- and hence
-# the catalog -- ships in the image alongside it.
-CROCODASH_ROOT = Path("/workspace/CrocoDash")
+# Where to read CrocoDash (and hence the catalog) from. Defaults to the
+# image's own editable install; CI overrides it to a mounted checkout so the
+# submodule's CrocoDash is authoritative rather than the image's baked copy.
+CROCODASH_ROOT = Path(os.environ.get("CROCODASH_ROOT", "/workspace/CrocoDash"))
 WORK_ROOT = Path("/workspace/domain_sweep")
 
 # Held constant across every domain on purpose: the catalog varies the
