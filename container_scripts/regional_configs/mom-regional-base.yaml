@@ -1,47 +1,32 @@
-# CrocoDash regeneration config for the "mom-regional-base" testmods.
-# Produces fresh grid/topo/vgrid/OBC/IC data for the Panama domain, staged
-# under DIN_LOC_ROOT so create_test builds/runs against real CrocoDash
-# output instead of a static fixture. Looked up by run_regional_test.py via
-# the test name's base testmods component (see discover_regional_tests.py).
+# A small, ready-to-run CrocoDash case config for this container.
 #
-# Uses DATM%NYF (not JRA) specifically to avoid needing JRA55's large
-# real-forcing dataset in CI -- NYF's T62 atm forcing is already staged via
-# scripts/download_nyf_inputdata.sh (same as nyf-run-test). SROF (not
-# DROF%GLOFAS) means no runoff grid/mapping is needed either. Tides and
-# chlorophyll are both left unconfigured (off) -- neither is required for
-# this compset (both are purely opt-in in CrocoDash, only triggered by
-# passing tidal_constituents / chl_processed_filepath), so no TPXO or
-# SeaWiFS input is needed.
+# Mount it as /workspace/case_config.yaml and run_case.sh will build and run
+# it end to end (see the README's Quick Start). Copy it and edit the values
+# below for your own domain; keep case.caseroot and case.inputdir as they are,
+# since run_case.sh expects the case at /workspace/case.
 #
-# There is no registered alias for this compset -- use the long name
-# directly.
+# The choices here are all about needing nothing from the network:
 #
-# OBC/IC ocean forcing uses REFERENCE_OCEAN (CrocoDash PR #265,
-# https://github.com/CROCODILE-CESM/CrocoDash/pull/265, branch
-# refactor-obc-ic) -- a synthetic, deterministic, no-network/no-credentials
-# MOM6 forcing product, so no raw GLORYS data staging is needed either.
-# This config requires that branch: crocontainer's CrocoDash submodule
-# pointer must be on/past it before this will import.
+#   DATM%NYF (not JRA)     NYF's T62 atm forcing is small and pre-staged by
+#                          scripts/download_nyf_inputdata.sh; JRA55 is not.
+#   SROF (not DROF%GLOFAS) no runoff grid or mapping file needed.
+#   topo type: flat        no GEBCO subset to fetch.
+#   reference_ocean        synthetic, deterministic OBC/IC forcing generated
+#                          in memory -- no GLORYS download, no credentials.
+#   tides / chlorophyll    left unconfigured, so off. Both are opt-in in
+#                          CrocoDash, so no TPXO or SeaWiFS input is needed.
 #
-# testlist_mom.xml (external MOM_interface repo) registers this test under
-# CR_JRA_GLOFAS, which resolves to a real DATM%JRA + DROF%GLOFAS compset --
-# neither JRA55 atm forcing nor a GLOFAS runoff-mapping file is something
-# this synthetic regen produces. Rather than wait on an external-repo edit
-# to register an NYF-based compset there, `compset_override` below (read by
-# run_regional_test.py) swaps the compset in the test name actually handed to
-# create_test for this cheaper one -- CIME resolves a compset field by
-# either alias or full long name (CIME/XML/compsets.py::get_compset_match),
-# so substituting a long name for a registered alias at run time is a
-# legal, not a hacky, substitution. testlist_mom.xml stays the source of
-# truth for which tests exist; this just controls which compset variant
-# this container actually runs one of them against.
+# There is no registered CESM alias for this compset -- the long name below is
+# the way to ask for it.
+#
+# reference_ocean arrives with CrocoDash PR #265
+# (https://github.com/CROCODILE-CESM/CrocoDash/pull/265). The CrocoDash
+# submodule pointer must be on or past it for this config to import.
 
 crocodash:
-  # Shrunk from the original Panama fixture's 3deg/0.05res (60x60=3600
-  # cells) to 1deg/0.1res (10x10=100 cells) -- the first CI run's RUN phase
-  # exhausted the GitHub-hosted runner's ~14GB disk after 44 minutes then
-  # hung until the job timeout. A much smaller domain keeps this a true
-  # smoke test.
+  # 10x10 cells. Deliberately tiny: the first CI run of a 60x60 version
+  # exhausted the GitHub-hosted runner's ~14GB disk after 44 minutes. This is
+  # a smoke test, not a science case.
   grid:
     resolution: 0.1
     xstart: 278.0
@@ -50,9 +35,6 @@ crocodash:
     leny: 1.0
     name: panama1
 
-  # Flat bathymetry, not a real GEBCO subset -- this is a smoke test, and
-  # CrocoDash's own default (Topo.set_flat) needs no external file/network
-  # fetch at all, unlike the "dataset" source type this config used before.
   topo:
     min_depth: 9.5
     source:
@@ -66,8 +48,8 @@ crocodash:
 
   case:
     cesmroot: /workspace/CESM
-    caseroot: /workspace/regional_test_case
-    inputdir: /workspace/regional_test_inputdir
+    caseroot: /workspace/case
+    inputdir: /workspace/inputdir
     compset: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV
     atm_grid_name: T62
     machine: ubuntu-latest
@@ -77,50 +59,3 @@ crocodash:
     date_range: ["2000-01-01 00:00:00", "2000-01-05 00:00:00"]
     product_name: reference_ocean
     function_name: get_reference_ocean_data
-    # No raw_data_staging needed -- REFERENCE_OCEAN generates OBC/IC data
-    # in memory, no fetch step between `create --configure-only` and
-    # `process` required. No tidal_constituents / chl args -- tides and
-    # chlorophyll both stay off.
-
-# Read by run_regional_test.py: overrides this test's compset (as registered
-# in testlist_mom.xml, CR_JRA_GLOFAS) with this long name when actually
-# invoking create_test -- same DATM%NYF/SROF value as crocodash.case.compset
-# above, for the same reason (see the file header comment): avoids
-# downloading real JRA55 forcing and needing a real GLOFAS runoff-mapping
-# file, neither of which this synthetic regen produces.
-compset_override: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV
-
-# Where regenerated files land, and which ones need renaming to match the
-# fixed filenames the target testmods' user_nl_mom references. Most
-# CrocoDash forcing outputs (OBC/IC files) already use fixed names with no
-# run-specific suffix -- only the grid/topo/vgrid/mesh files get a
-# "_<grid>_<session_id>"-style suffix and need glob-based renaming.
-staging:
-  din_loc_root_subdir: ocn/mom/croc/testing_data/panama
-  rename_globs:
-    - glob: "ocean_hgrid_*.nc"
-      dest: ocean_hgrid_panama1_352fd1.nc
-    - glob: "ocean_topog_*.nc"
-      dest: ocean_topog_panama1_352fd1.nc
-    - glob: "ocean_vgrid_*.nc"
-      dest: ocean_vgrid_panama1_352fd1.nc
-    - glob: "ESMF_mesh_*.nc"
-      dest: ESMF_mesh_panama1_352fd1.nc
-    # base/user_nl_mom explicitly overrides ALE_COORDINATE_CONFIG to the
-    # real panama vgrid file above -- MOM6 never reads this one at runtime.
-    # But MOM_input.yaml's *default* value for ALE_COORDINATE_CONFIG (used
-    # when MOM6_VERTICAL_GRID=zstar_65L, the unoverridden default) points at
-    # vgrid_65L_20200626.nc under this same staging dir, and check_input_data
-    # validates that default's existence regardless of the user_nl_mom
-    # override. Satisfy that phantom check with a second copy of our own
-    # vgrid file under the expected alias name.
-    - glob: "ocean_vgrid_*.nc"
-      dest: vgrid_65L_20200626.nc
-  copy_as_is:
-    - forcing_obc_segment_001.nc
-    - forcing_obc_segment_002.nc
-    - forcing_obc_segment_003.nc
-    - forcing_obc_segment_004.nc
-    - init_eta.nc
-    - init_tracers.nc
-    - init_vel.nc

@@ -1,11 +1,19 @@
 # Crocontainer
 
 [![CESM runs in container](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/container-test.yml/badge.svg)](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/container-test.yml)
+[![Domain sweep](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/domain-sweep.yml/badge.svg)](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/domain-sweep.yml)
+[![MOM6 runs](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/mom6-runs.yml/badge.svg)](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/mom6-runs.yml)
+
+| Badge | What it covers | When it runs |
+|---|---|---|
+| **CESM runs in container** | The published image is usable at all — CrocoDash imports, CESM is present, the `crocodash` CLI has the flags the other workflows call. | every push and PR |
+| **Domain sweep** | Every grid topology in CrocoDash's domain catalog taken through `configure_forcings` → `process_forcings`, one job each. No MOM6. | every push and PR |
+| **MOM6 runs** | MOM6 built fresh and actually integrated on three catalog domains, plus one `DEBUG=TRUE` build. | weekly, and on demand |
 
 Crocontainer is a pre-built container image that lets you run a [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash)-configured CESM regional ocean case anywhere — on your laptop or on an HPC system like Derecho — without installing CESM, ESMF, or MPI yourself.
 
 The primary workflow is:
-1. **Write** a CrocoDash YAML case config to configure your regional ocean domain — see `container_scripts/regional_configs/mom-regional-base.yaml` for a working example (its `case.caseroot`/`case.inputdir` must be `/workspace/case`/`/workspace/inputdir` for your own copy).
+1. **Write** a CrocoDash YAML case config to configure your regional ocean domain — see `container_scripts/regional_configs/mom-regional-base.yaml` for a working example (keep its `case.caseroot`/`case.inputdir` as they are — `run_case.sh` expects the case at `/workspace/case`).
 2. **Run** the container with your edited YAML config mounted as `/workspace/case_config.yaml` — it builds, configures, and executes the case inside via the `crocodash` CLI. No script to write or mount.
 
 If you need features from a CrocoDash version newer than what's in the container image, see [Bundle Mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container) instead.
@@ -75,7 +83,7 @@ The container includes a full CESM checkout at `/workspace/CESM` and the `CrocoD
 
 One of a YAML config or a [bundle](#bundle-mode-when-your-crocodash-is-newer-than-the-container) must be mounted -- `run_case.sh` exits with an error otherwise.
 
-`container_scripts/regional_configs/mom-regional-base.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) for your own case -- it's also the config the container CI itself regenerates and validates weekly (see [CI/CD](#cicd)). Edit a copy of it to configure:
+`container_scripts/regional_configs/mom-regional-base.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) for your own case. Edit a copy of it to configure:
 
 - **Domain**: `grid.xstart`, `grid.ystart`, `grid.lenx`, `grid.leny`
 - **Resolution**: `grid.resolution`
@@ -384,7 +392,7 @@ The Dockerfile:
 
 ### CI/CD
 
-Two GitHub Actions workflows handle CI/CD:
+Four GitHub Actions workflows handle CI/CD. Three of them carry a badge at the top of this README.
 
 **Build** (`.github/workflows/build.yml`): builds and pushes multi-arch images automatically.
 - **Trigger**: every Monday at 6am UTC, on version tags (`v*.*.*`), or manually via `workflow_dispatch`
@@ -392,10 +400,16 @@ Two GitHub Actions workflows handle CI/CD:
 - **Registry**: `ghcr.io/crocodile-cesm/crocontainer`
 - **Tags**: `latest-amd64`, `latest-arm64`, per-commit `sha-<hash>-<arch>`, and a merged `latest` multi-arch manifest
 
-**Container Tests** (`.github/workflows/container-test.yml`): validates the image on every push, weekly, and via manual dispatch. Three jobs, in sequence:
-- **`smoke-test`**: pulls the image and verifies CrocoDash imports and CESM files are present
-- **`domain-mom6-build`** (scheduled/manual only): builds CESM+MOM6 once per run and uploads it as a run-scoped artifact -- the executable is domain-independent (`MOM6_MEMORY_MODE=dynamic_symmetric`), so every domain job below shares this one compile. Built fresh each run rather than cached, so build regressions still surface
-- **`domain-mom6-run`** (scheduled/manual only): one matrix job per selected domain -- restores that build and actually runs MOM6 on the domain, uploading `RUNDIR` as an artifact. Replaced a CIME `create_test` suite that checked the same thing on one hardcoded grid; adding a domain here is a row in CrocoDash's `tests/fixtures/domains.py`, not an upstream `testlist_mom.xml` entry plus testmods dir plus image rebuild
-- **`domain-mom6-debug`** (scheduled/manual only): the same, on one domain, built with `DEBUG=TRUE` -- bounds checks and FP traps that the optimised build runs straight past
+**CESM runs in container** (`.github/workflows/container-test.yml`): one `smoke-test` job that pulls the image and verifies CrocoDash imports, CESM files are present, and the `crocodash` CLI has the flags the other workflows call. Runs on every push and PR.
 
-The MOM6 jobs run a subset of the catalog, not all of it. **`arctic_cap` is a known failure and is expected to be red.** Its forcing is produced fine (it passes `domain-sweep`) and MOM6 initializes on it cleanly, but the run goes unstable on the first coupled step -- NaN SSH on the boundary, then `FATAL: extreme surface values`. Most likely the test configuration rather than a CrocoDash bug: a polar cap with flat bathymetry, no land, and open boundaries across the pole is not a physically sensible case. It is kept in the matrix so it stays visible and so it will turn green by itself if that ever changes; it cannot block a PR, since these jobs only run on dispatch/schedule.
+**Domain sweep** (`.github/workflows/domain-sweep.yml`): runs on every push and PR -- minutes rather than hours, because a seam or polar regression in the forcing pipeline is worth catching on the PR that causes it.
+- **`discover-domains`**: reads the matrix out of CrocoDash's own catalog rather than hardcoding it here, so adding or xfailing a domain upstream needs no crocontainer edit
+- **`domain-sweep`**: one job per domain, each taken through `configure_forcings` -> `process_forcings` against the synthetic `REFERENCE_OCEAN` product. One job per domain rather than one job for all of them: each gets its own timeout, log and artifact, and a wedged domain cannot take the healthy ones down with it
+- **`domain-sweep-summary`**: merges the per-domain artifacts into a pass/fail table in the run summary
+
+**MOM6 runs** (`.github/workflows/mom6-runs.yml`): scheduled weekly and available on demand, never on a PR -- these are hours.
+- **`domain-mom6-build`**: builds CESM+MOM6 once per run and uploads it as a run-scoped artifact -- the executable is domain-independent (`MOM6_MEMORY_MODE=dynamic_symmetric`), so every domain job below shares this one compile. Built fresh each run rather than cached, so build regressions still surface
+- **`domain-mom6-run`**: one matrix job per selected domain -- restores that build and actually runs MOM6 on the domain, uploading `RUNDIR` as an artifact. Replaced a CIME `create_test` suite that checked the same thing on one hardcoded grid; adding a domain here is a row in CrocoDash's `tests/fixtures/domains.py`, not an upstream `testlist_mom.xml` entry plus testmods dir plus image rebuild
+- **`domain-mom6-debug`**: the same, on one domain, built with `DEBUG=TRUE` -- bounds checks and FP traps that the optimised build runs straight past
+
+The MOM6 jobs run a chosen subset of the catalog, not all of it. **`arctic_cap` is a known failure and is currently excluded.** Its forcing is produced fine — it passes the domain sweep — and MOM6 initializes on it cleanly, but the run goes unstable on the first coupled step: NaN SSH on the boundary, then `FATAL: extreme surface values`. Most likely the test configuration rather than a CrocoDash bug, since a polar cap with flat bathymetry, no land, and open boundaries across the pole is not a physically sensible case to integrate. It will be added back to the matrix once it runs.

@@ -7,11 +7,12 @@ suite, which is cheap enough to run anywhere. This half needs a real CESM root
 and a machine definition, costs ~30s per domain, and so lives here instead --
 the container is the only place both are available without Derecho.
 
-Unlike run_regional_test.py this never touches create_test, testlist_mom.xml or
-testmods, and never builds or runs MOM6. It stops at "did CrocoDash produce
-plausible forcing for this topology", which is the question the catalog exists
-to ask: whether a polar cap, an antimeridian-straddling box or a rotated grid
-survives the path from Grid to OBC/IC files.
+This never builds or runs MOM6. It stops at "did CrocoDash produce plausible
+forcing for this topology", which is the question the catalog exists to ask:
+whether a polar cap, an antimeridian-straddling box or a rotated grid survives
+the path from Grid to OBC/IC files. Actually integrating MOM6 on a few of these
+domains is a separate job -- see .github/workflows/mom6-runs.yml, which drives
+run_case.sh with configs this script emits via --emit-config.
 
 The catalog itself is CrocoDash's -- tests/fixtures/domains.py, one DomainSpec
 per lat/lon topology -- imported rather than duplicated so there is a single
@@ -24,6 +25,8 @@ Usage:
   run_domain_sweep.py                          # every supported domain
   run_domain_sweep.py --domains arctic_cap,tiny
   run_domain_sweep.py --tags seam,polar
+  run_domain_sweep.py --list-domains           # JSON array of keys, for the CI matrix
+  run_domain_sweep.py --emit-config nh_atlantic  # that domain's case config, for run_case.sh
 """
 
 import argparse
@@ -42,6 +45,7 @@ import yaml
 # image's own editable install; CI overrides it to a mounted checkout so the
 # submodule's CrocoDash is authoritative rather than the image's baked copy.
 CROCODASH_ROOT = Path(os.environ.get("CROCODASH_ROOT", "/workspace/CrocoDash"))
+CATALOG_RELPATH = "tests/fixtures/domains.py"
 WORK_ROOT = Path("/workspace/domain_sweep")
 
 # Held constant across every domain on purpose: the catalog varies the
@@ -69,9 +73,6 @@ EXPECTED_OUTPUTS = [
     "init_eta.nc",
     "init_vel.nc",
 ]
-
-
-CATALOG_RELPATH = "tests/fixtures/domains.py"
 
 # A domain that has not finished in this long is treated as hung and killed.
 # Generous next to the ~12s a healthy domain takes, so this can only fire on a

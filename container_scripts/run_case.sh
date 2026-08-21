@@ -16,9 +16,9 @@ unset NCAR_HOST
 #        docker run -v /path/to/your_config.yaml:/workspace/case_config.yaml ...
 #   2. Mount a `crocodash bundle` output directory as /workspace/bundle to
 #      reconstruct a case shared from another machine/user.
-# One of the two must be mounted -- there's no built-in demo case fallback;
-# see container_scripts/regional_configs/*.yaml + run_regional_test.py for a
-# CI-validated, ready-to-run regional case definition instead.
+# One of the two must be mounted -- there's no built-in demo case fallback.
+# container_scripts/regional_configs/mom-regional-base.yaml is a ready-to-run
+# example for mode 1.
 if [[ -f /workspace/case_config.yaml ]]; then
     crocodash create --config /workspace/case_config.yaml --override
 elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
@@ -100,21 +100,24 @@ CORE_IAF_JRA.V_10:datafiles = ${BASE}.v_10.TL319.${YR_PREV}.171019.nc,${BASE}.v_
 EOF
 fi
 
-# Optional build sharing, for CI. MOM6's executable does not depend on the
-# domain: CrocoDash always sets MOM6_MEMORY_MODE=dynamic_symmetric, so
-# NIGLOBAL/NJGLOBAL are read from MOM_input at runtime rather than compiled in.
-# One build therefore serves every grid using the same compset, machine and
-# compiler, which is what lets several domains share a single compile.
+# Three optional env knobs follow, all for CI. None is set in normal use, so
+# the default path through this script is unchanged: build, then run.
 #
+#   CROC_DEBUG_BUILD=1       build with DEBUG=TRUE
 #   CROC_BUILD_ONLY=1        build, save the build tree to $CROC_BUILD_ARCHIVE, stop
 #   CROC_BUILD_ARCHIVE=path  with CROC_BUILD_ONLY, where to write it;
 #                            otherwise, a build tree to restore instead of compiling
 #
-# Neither is set in normal use, so the default path is unchanged: build, run.
+# Build sharing is sound because MOM6's executable does not depend on the
+# domain: CrocoDash always sets MOM6_MEMORY_MODE=dynamic_symmetric, so
+# NIGLOBAL/NJGLOBAL are read from MOM_input at runtime rather than compiled in.
+# One build therefore serves every grid using the same compset, machine and
+# compiler, which is what lets several domain jobs share a single compile.
+
 # Debug builds (-fcheck=bounds, FP traps) catch out-of-bounds access and NaNs
 # that an optimised build runs straight past -- the failure mode a regional
-# grid with open boundaries is most likely to hide. Off by default: it is
-# slower to build and to run.
+# grid with open boundaries is most likely to hide. Off by default: slower to
+# build and slower to run.
 if [[ -n "${CROC_DEBUG_BUILD:-}" ]]; then
     ./xmlchange DEBUG=TRUE
     echo "Building with DEBUG=TRUE"
