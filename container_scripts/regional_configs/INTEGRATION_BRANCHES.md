@@ -15,7 +15,7 @@ Pointed at by this repo's `CrocoDash` submodule. Contents:
 |---|---|
 | `refactor-obc-ic` (#265) | `REFERENCE_OCEAN` — deterministic synthetic forcing, no network or credentials |
 | `fix-custom-compset-multi-modifier` (#272) | custom multi-modifier compsets, e.g. `MOM6%REGIONAL%MARBL-BIO` |
-| REFERENCE_OCEAN MARBL tracers (#273) | BGC regen for `mom-regional-bgc` |
+| REFERENCE_OCEAN MARBL tracers (#273) | MARBL tracers in the synthetic product, for when BGC returns |
 | `domain-test-matrix` (#274) | the domain catalog and `recipe.py`'s `grid.type` dispatch |
 
 #272 and #273 arrived via the earlier `tmp-ci-validation-bgc` branch, which this
@@ -30,10 +30,20 @@ one supersedes.
   so the polar caps and rotated grids cannot be expressed as YAML at all and
   the sweep would cover only the rectangular half of the catalog.
 
+The submodule is injected whole -- mounted at `/workspace/crocodash_src` and
+put ahead of the image's copy on `PYTHONPATH` -- rather than having individual
+files mounted over the image's install. Cherry-picking does not work: the image
+is rebuilt weekly from `main`, so its baked CrocoDash is at some older commit,
+and mounting half of a refactor over the other half fails. `PYTHONPATH` must
+include `CrocoDash/visualCaseGen` as well as the checkout root and
+`CrocoDash/rm6`, because `visualCaseGen` and `ProConPy` are imported as
+top-level packages and would otherwise resolve to the image's older copies.
+
 **Retire when** #274 and its base #265 have merged and `build.yml` has
-republished `latest-amd64`. The guard in `container-test.yml` skips the sweep
-with a message naming the pointer if it ever regresses below #274, so a
-regression is loud rather than silent.
+republished `latest-amd64` -- at which point the injection, the
+`CROCODASH_ROOT` override and the `PYTHONPATH` entries all come out. The guard
+in `discover-domains` emits an empty matrix with a message naming the pointer
+if it ever regresses below #274, so a regression is loud rather than silent.
 
 ## `NCAR/mom6_forge` @ `ci-integration-metrics`
 
@@ -55,8 +65,13 @@ one side, so bumping the mom6_forge pointer is a no-op for that suite:
 
 | mom6_forge | result |
 |---|---|
-| as pinned by CrocoDash | 209 passed, 6 skipped, 27 xfailed |
+| as pinned by CrocoDash | 222 passed, 6 skipped, 28 xfailed |
 | `ci-integration-metrics` | 229 passed, 6 skipped, 7 xfailed |
+
+(The `ci-integration-metrics` row was measured before the
+`equator_prime_meridian` domain was added, so its totals are one domain
+behind; the point it makes -- that the probes make the pointer a no-op -- is
+unaffected.)
 
 One caveat worth knowing: **#113 does not fix the inflated bounding box** on a
 rotated domain crossing the antimeridian. It widens any raw longitude span over
