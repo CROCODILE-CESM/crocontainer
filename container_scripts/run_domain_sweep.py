@@ -290,7 +290,43 @@ def main():
         action="store_true",
         help="Print the selected domain keys as a JSON array and exit",
     )
+    parser.add_argument(
+        "--emit-config",
+        metavar="KEY",
+        help=(
+            "Print one domain's CrocoDash YAML case config to stdout and exit, "
+            "for feeding to run_case.sh (which builds and runs MOM6)"
+        ),
+    )
+    parser.add_argument(
+        "--caseroot",
+        default="/workspace/case",
+        help="caseroot to write into --emit-config output (default: run_case.sh's)",
+    )
+    parser.add_argument(
+        "--inputdir",
+        default="/workspace/inputdir",
+        help="inputdir to write into --emit-config output (default: run_case.sh's)",
+    )
     args = parser.parse_args()
+
+    # Emitted from the same build_config() the sweep runs, so a domain that
+    # MOM6 is asked to run is configured identically to the one the sweep just
+    # validated -- the only difference is where the case lands. run_case.sh
+    # requires /workspace/case and /workspace/inputdir specifically, hence the
+    # defaults above.
+    if args.emit_config:
+        by_key = {d.key: d for d in load_catalog()}
+        if args.emit_config not in by_key:
+            sys.exit(
+                f"Unknown domain: {args.emit_config}\n"
+                f"Valid keys: {', '.join(sorted(by_key))}"
+            )
+        cfg = build_config(
+            by_key[args.emit_config], Path(args.caseroot), Path(args.inputdir)
+        )
+        print(yaml.safe_dump(cfg, sort_keys=False))
+        return 0
 
     keys = args.domains.split(",") if args.domains else None
     tags = args.tags.split(",") if args.tags else None

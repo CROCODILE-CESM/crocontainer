@@ -193,6 +193,69 @@ jobs:
                   print(f"```\n{problem}\n```")
           EOF
 
+  domain-mom6-run:
+    name: MOM6 ${{ matrix.domain }}
+    # Actually runs MOM6 on a handful of catalog domains, rather than stopping
+    # at "did CrocoDash produce plausible forcing" like domain-sweep does.
+    #
+    # Deliberately NOT routed through create_test/discover-regional-tests. That
+    # path reads testlist_mom.xml and config_compsets.xml out of the MOM
+    # interface repo, and its regional testmods hardcode NIGLOBAL/NJGLOBAL and
+    # an ocean_hgrid filename -- so every domain added there needs an upstream
+    # entry, its own testmods dir, and an image rebuild before CI can see it.
+    # run_case.sh takes a CrocoDash YAML directly and does create -> build ->
+    # submit, which is all this needs: the sweep already proved the forcing is
+    # good, so what is left is whether MOM6 accepts the grid and runs.
+    #
+    # Gated like regional-test below: a MOM6 build is hours, not minutes.
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        # Chosen, not discovered -- three topologies that stress MOM6's grid
+        # handling in different ways, kept small because each one is a full
+        # build and run. Edit this list to change what MOM6 actually exercises.
+        domain:
+          - equator_prime_meridian   # lat and lon both change sign
+          - dateline_seam_360        # crosses the antimeridian
+          - arctic_cap               # polar projection, non-rectangular
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-podman
+
+      - name: Emit the CrocoDash config for ${{ matrix.domain }}
+        # Same build_config() the sweep uses, so MOM6 runs the identical case
+        # definition the sweep validated -- only the caseroot differs.
+        run: |
+          podman run --rm --platform linux/amd64 \
+            -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
+            -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -e CROCODASH_ROOT=/workspace/crocodash_src \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6 \
+            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            conda run -n CrocoDash --no-capture-output \
+              python /workspace/run_domain_sweep.py \
+                --emit-config "${{ matrix.domain }}" > case_config.yaml
+          echo "--- case_config.yaml"; cat case_config.yaml
+
+      - name: Build and run MOM6 on ${{ matrix.domain }}
+        run: |
+          podman run --rm --platform linux/amd64 \
+            -v "${{ github.workspace }}/case_config.yaml:/workspace/case_config.yaml" \
+            -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
+            -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -e CROCODASH_ROOT=/workspace/crocodash_src \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6 \
+            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            /bin/bash /workspace/run_case.sh
+
   discover-regional-tests:
     name: Discover regional tests
     # Just parses testlist_mom.xml/config_compsets.xml out of the image --
