@@ -119,8 +119,10 @@ jobs:
           # recipe.py are mounted over the image's editable install for the
           # same reason case.py and reference.py are in regional-test below --
           # to run the submodule's version rather than whatever was baked into
-          # the published image. All four mounts can go once their PRs merge
-          # and build.yml republishes latest-amd64.
+          # the published image. extract_forcings/ joins them because the OBC
+          # write path is what this sweep actually exercises: without it the
+          # image's copy runs and any fix there goes untested. Every mount can
+          # go once their PRs merge and build.yml republishes latest-amd64.
           podman run --rm --platform linux/amd64 \
             -v "/mnt/domain_sweep:/workspace/domain_sweep" \
             -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
@@ -128,6 +130,7 @@ jobs:
             -v "${{ github.workspace }}/CrocoDash/CrocoDash/recipe.py:/workspace/CrocoDash/CrocoDash/recipe.py" \
             -v "${{ github.workspace }}/CrocoDash/CrocoDash/case.py:/workspace/CrocoDash/CrocoDash/case.py" \
             -v "${{ github.workspace }}/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py:/workspace/CrocoDash/CrocoDash/raw_data_access/datasets/reference.py" \
+            -v "${{ github.workspace }}/CrocoDash/CrocoDash/extract_forcings:/workspace/CrocoDash/CrocoDash/extract_forcings" \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py \
