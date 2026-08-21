@@ -34,16 +34,69 @@ jobs:
               crocodash create --help 2>&1 | grep -q -- '--configure-only' && echo 'crocodash create --configure-only OK'
             "
 
+  discover-domains:
+    name: Discover domains
+    # Mirrors discover-regional-tests below: the matrix is built from the
+    # image rather than hardcoded here, so adding or xfailing a domain in
+    # CrocoDash needs no crocontainer-side edit.
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    outputs:
+      domains: ${{ steps.discover.outputs.domains }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-podman
+
+      - name: List the domains in CrocoDash's catalog
+        id: discover
+        run: |
+          # tests/fixtures/domains.py arrives with CrocoDash#274. Until the
+          # submodule pointer includes it there is nothing to sweep, and an
+          # empty matrix says so plainly rather than failing on an import error.
+          if [ ! -f CrocoDash/tests/fixtures/domains.py ]; then
+            echo "domains=[]" >> "$GITHUB_OUTPUT"
+            echo "CrocoDash submodule ($(git -C CrocoDash rev-parse --short HEAD)) predates CrocoDash#274 — skipping the sweep." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          DOMAINS=$(podman run --rm --platform linux/amd64 \
+            -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
+            -v "${{ github.workspace }}/CrocoDash/tests:/workspace/CrocoDash/tests" \
+            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            conda run -n CrocoDash --no-capture-output \
+              python /workspace/run_domain_sweep.py --list-domains)
+          echo "Discovered domains: ${DOMAINS}"
+          echo "domains=${DOMAINS}" >> "$GITHUB_OUTPUT"
+
   domain-sweep:
-    name: Domain sweep
+    name: ${{ matrix.domain }}
     # Deliberately not gated to workflow_dispatch/schedule like regional-test
     # below: this never builds or runs MOM6, so it is minutes rather than
     # hours, and a seam or polar regression in CrocoDash's forcing pipeline is
     # exactly the kind of thing worth catching on the PR that causes it.
     # No NYF inputdata either -- nothing here reads atm forcing.
+    #
+    # One job per domain rather than one job for all sixteen. A single job
+    # cannot express this: DOMAIN_TIMEOUT_S is 10 minutes, so a handful of
+    # wedged domains overruns any per-job ceiling and takes the healthy
+    # domains down with them. The first full run of the sweep lost 12 of 16
+    # domains that way. Fanning out gives every domain its own budget, its own
+    # log, and its own artifact, and they all run concurrently.
     runs-on: ubuntu-latest
-    needs: smoke-test
-    timeout-minutes: 60
+    needs: discover-domains
+    if: needs.discover-domains.outputs.domains != '[]'
+    # DOMAIN_TIMEOUT_S (10 min) plus the image pull, with room to spare.
+    timeout-minutes: 20
+    strategy:
+      # One bad domain must not cancel the other fifteen -- the whole point of
+      # the catalog is to see every topology's result in one run.
+      fail-fast: false
+      matrix:
+        domain: ${{ fromJson(needs.discover-domains.outputs.domains) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,22 +112,7 @@ jobs:
           sudo mkdir -p /mnt/domain_sweep
           sudo chown runner:runner /mnt/domain_sweep
 
-      - name: Check the CrocoDash submodule carries the domain catalog
-        # tests/fixtures/domains.py arrives with CrocoDash#274. Until the
-        # submodule pointer includes it there is nothing to sweep, and the job
-        # should say so plainly rather than fail on an import error.
-        id: catalog
-        run: |
-          if [ -f CrocoDash/tests/fixtures/domains.py ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "CrocoDash submodule ($(git -C CrocoDash rev-parse --short HEAD)) predates CrocoDash#274 — skipping the sweep." \
-              | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Sweep the CrocoDash domain catalog
-        if: steps.catalog.outputs.present == 'true'
+      - name: Sweep ${{ matrix.domain }}
         run: |
           # The catalog and the grid.type dispatch both come from
           # CROCODILE-CESM/CrocoDash#274, so tests/fixtures/domains.py and
@@ -93,41 +131,61 @@ jobs:
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py \
-                --json-summary /workspace/domain_sweep/summary.json
+                --domains "${{ matrix.domain }}" \
+                --json-summary "/workspace/domain_sweep/${{ matrix.domain }}.json"
 
-      - name: Publish results table
-        if: always() && steps.catalog.outputs.present == 'true'
+      - name: Upload ${{ matrix.domain }} result
+        if: always()
         # podman runs as root, so anything it wrote under /mnt is root-owned
         # and unreadable to the unprivileged user upload-artifact runs as --
-        # hence the chown before both this and the upload below.
+        # hence the chown first. Named per domain so the aggregate job below
+        # can merge every result into one directory without collisions.
+        run: sudo chown -R runner:runner /mnt/domain_sweep || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: domain-result-${{ matrix.domain }}
+          path: /mnt/domain_sweep/${{ matrix.domain }}.json
+          if-no-files-found: warn
+
+  domain-sweep-summary:
+    name: Domain sweep summary
+    # Collects the per-domain artifacts into the one table the single-job
+    # sweep used to print. Runs even when domains failed -- especially then.
+    runs-on: ubuntu-latest
+    # discover-domains is needed for its output, not its ordering -- referring
+    # to a job's outputs without declaring it here silently yields ''.
+    needs: [discover-domains, domain-sweep]
+    if: always() && needs.discover-domains.outputs.domains != '[]'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: domain-result-*
+          path: results
+          merge-multiple: true
+
+      - name: Publish results table
         run: |
-          sudo chown -R runner:runner /mnt/domain_sweep || true
           python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
           import json, pathlib
-          path = pathlib.Path("/mnt/domain_sweep/summary.json")
-          if not path.exists():
-              print("The sweep did not get far enough to write a summary.")
+          files = sorted(pathlib.Path("results").glob("*.json"))
+          if not files:
+              print("No domain produced a result.")
               raise SystemExit
-          results = json.loads(path.read_text())
+          results = [r for f in files for r in json.loads(f.read_text())]
+          failed = [r for r in results if r["problems"]]
+          print(f"{len(results) - len(failed)}/{len(results)} domains passed\n")
           print("| domain | result | seconds |")
           print("|---|---|---|")
           for r in results:
               status = "ok" if not r["problems"] else "**FAIL**"
               print(f"| {r['key']} | {status} | {r['seconds']:.0f} |")
-          for r in results:
-              if r["problems"]:
-                  print(f"\n### {r['key']}\n")
-                  for problem in r["problems"]:
-                      print(f"```\n{problem}\n```")
+          for r in failed:
+              print(f"\n### {r['key']}\n")
+              for problem in r["problems"]:
+                  print(f"```\n{problem}\n```")
           EOF
-
-      - name: Upload domain sweep summary
-        if: always() && steps.catalog.outputs.present == 'true' 
-        uses: actions/upload-artifact@v4
-        with:
-          name: domain-sweep-summary-${{ github.run_id }}
-          path: /mnt/domain_sweep/summary.json
-          if-no-files-found: warn
 
   discover-regional-tests:
     name: Discover regional tests

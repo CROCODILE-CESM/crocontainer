@@ -284,12 +284,25 @@ def main():
         help="Keep each domain's caseroot/inputdir instead of deleting it",
     )
     parser.add_argument("--json-summary", help="Write the results here as JSON")
+    parser.add_argument(
+        "--list-domains",
+        action="store_true",
+        help="Print the selected domain keys as a JSON array and exit",
+    )
     args = parser.parse_args()
 
     keys = args.domains.split(",") if args.domains else None
     tags = args.tags.split(",") if args.tags else None
 
     specs = select(load_catalog(), keys, tags)
+
+    # The CI matrix builds itself from this, so the list of jobs and the list
+    # of domains a job would sweep come from the same select() call. Emitting
+    # the keys any other way (a hardcoded matrix, a second parser) would let
+    # the two drift apart the moment a domain is added or xfailed.
+    if args.list_domains:
+        print(json.dumps([s.key for s in specs]))
+        return 0
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
     print(
         f"Sweeping {len(specs)} domains: {', '.join(s.key for s in specs)}\n",
