@@ -193,6 +193,67 @@ jobs:
                   print(f"```\n{problem}\n```")
           EOF
 
+  domain-mom6-build:
+    name: MOM6 build
+    # Built fresh on every run -- a stale cached executable would hide exactly
+    # the build regressions this suite exists to catch -- but built ONCE and
+    # shared with the per-domain jobs below, instead of each of them compiling
+    # the same thing. Safe because the executable does not depend on the
+    # domain: CrocoDash sets MOM6_MEMORY_MODE=dynamic_symmetric, so
+    # NIGLOBAL/NJGLOBAL come from MOM_input at runtime. The compset, machine
+    # and compiler -- the things the build does depend on -- are identical
+    # across every domain in the catalog.
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-podman
+
+      - name: Emit a config to build against
+        # Any domain will do -- the build is domain-independent -- so this uses
+        # the first of the matrix below rather than introducing a second list.
+        run: |
+          podman run --rm --platform linux/amd64 \
+            -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
+            -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -e CROCODASH_ROOT=/workspace/crocodash_src \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
+            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            conda run -n CrocoDash --no-capture-output \
+              python /workspace/run_domain_sweep.py \
+                --emit-config equator_prime_meridian > case_config.yaml
+
+      - name: Build MOM6
+        run: |
+          mkdir -p "${{ github.workspace }}/buildout"
+          podman run --rm --platform linux/amd64 \
+            -v "${{ github.workspace }}/case_config.yaml:/workspace/case_config.yaml" \
+            -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
+            -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -v "${{ github.workspace }}/buildout:/workspace/buildout" \
+            -e CROCODASH_ROOT=/workspace/crocodash_src \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
+            -e CROC_BUILD_ONLY=1 \
+            -e CROC_BUILD_ARCHIVE=/workspace/buildout/build.tgz \
+            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            /bin/bash /workspace/run_case.sh
+          sudo chown -R runner:runner "${{ github.workspace }}/buildout"
+          ls -lh "${{ github.workspace }}/buildout"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          # Scoped to this run by name, so nothing can leak a build between
+          # runs -- the point is a fresh compile every time, shared only here.
+          name: mom6-build-${{ github.run_id }}
+          path: buildout/build.tgz
+          retention-days: 1
+
   domain-mom6-run:
     name: MOM6 ${{ matrix.domain }}
     # Actually runs MOM6 on a handful of catalog domains, rather than stopping
@@ -203,21 +264,19 @@ jobs:
     # interface repo, and its regional testmods hardcode NIGLOBAL/NJGLOBAL and
     # an ocean_hgrid filename -- so every domain added there needs an upstream
     # entry, its own testmods dir, and an image rebuild before CI can see it.
-    # run_case.sh takes a CrocoDash YAML directly and does create -> build ->
-    # submit, which is all this needs: the sweep already proved the forcing is
-    # good, so what is left is whether MOM6 accepts the grid and runs.
-    #
-    # Gated like regional-test below: a MOM6 build is hours, not minutes.
+    # run_case.sh takes a CrocoDash YAML directly, which is all this needs: the
+    # sweep already proved the forcing is good, so what is left is whether MOM6
+    # accepts the grid and runs.
     runs-on: ubuntu-latest
-    needs: smoke-test
+    needs: domain-mom6-build
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    timeout-minutes: 150
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         # Chosen, not discovered -- three topologies that stress MOM6's grid
-        # handling in different ways, kept small because each one is a full
-        # build and run. Edit this list to change what MOM6 actually exercises.
+        # handling in different ways. Keep equator_prime_meridian first: the
+        # build job above builds against whichever is listed first.
         domain:
           - equator_prime_meridian   # lat and lon both change sign
           - dateline_seam_360        # crosses the antimeridian
@@ -229,6 +288,11 @@ jobs:
           submodules: recursive
 
       - uses: ./.github/actions/setup-podman
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mom6-build-${{ github.run_id }}
+          path: buildin
 
       - name: Emit the CrocoDash config for ${{ matrix.domain }}
         # Same build_config() the sweep uses, so MOM6 runs the identical case
@@ -245,14 +309,18 @@ jobs:
                 --emit-config "${{ matrix.domain }}" > case_config.yaml
           echo "--- case_config.yaml"; cat case_config.yaml
 
-      - name: Build and run MOM6 on ${{ matrix.domain }}
+      - name: Run MOM6 on ${{ matrix.domain }}
+        # CROC_BUILD_ARCHIVE without CROC_BUILD_ONLY means "restore this build
+        # tree instead of compiling", so this job goes straight to case.submit.
         run: |
           podman run --rm --platform linux/amd64 \
             -v "${{ github.workspace }}/case_config.yaml:/workspace/case_config.yaml" \
             -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
             -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
+            -v "${{ github.workspace }}/buildin/build.tgz:/workspace/build.tgz" \
             -e CROCODASH_ROOT=/workspace/crocodash_src \
             -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
+            -e CROC_BUILD_ARCHIVE=/workspace/build.tgz \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_case.sh
 
