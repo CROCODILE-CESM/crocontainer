@@ -195,6 +195,25 @@ def check_outputs(inputdir):
     return problems
 
 
+def check_case(caseroot):
+    """The CESM case was actually configured, not just created.
+
+    `crocodash create` can print a "Case Configuration Error" and still exit 0
+    -- e.g. when visualCaseGen rejects the grid directory layout, in which case
+    the case exists but its grid parameters were never written. Forcing files
+    are produced either way, so check_outputs() alone calls that a pass; MOM6
+    then fails at build time with KeyError: 'NIGLOBAL' out of its buildnml.
+    NIGLOBAL is the cheapest witness that the grid block made it into
+    user_nl_mom at all.
+    """
+    user_nl = Path(caseroot) / "user_nl_mom"
+    if not user_nl.exists():
+        return [f"{user_nl.name}: never written (case not configured)"]
+    if "NIGLOBAL" not in user_nl.read_text():
+        return ["user_nl_mom: no NIGLOBAL -- grid parameters were never applied"]
+    return []
+
+
 def run_domain(spec, keep):
     """Create and process one domain in its own crocodash subprocess.
 
@@ -265,7 +284,7 @@ def run_domain(spec, keep):
     elif proc.returncode != 0:
         problems = [f"crocodash create exited {proc.returncode}:\n{tail}"]
     else:
-        problems = check_outputs(inputdir)
+        problems = check_case(caseroot) + check_outputs(inputdir)
 
     if not keep:
         shutil.rmtree(domain_dir, ignore_errors=True)

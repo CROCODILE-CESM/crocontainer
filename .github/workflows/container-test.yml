@@ -67,7 +67,7 @@ jobs:
             -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
             -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
             -e CROCODASH_ROOT=/workspace/crocodash_src \
-            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6 \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py --list-domains)
@@ -133,7 +133,7 @@ jobs:
             -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
             -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
             -e CROCODASH_ROOT=/workspace/crocodash_src \
-            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6 \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py \
@@ -238,7 +238,7 @@ jobs:
             -v "${{ github.workspace }}/container_scripts/run_domain_sweep.py:/workspace/run_domain_sweep.py" \
             -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
             -e CROCODASH_ROOT=/workspace/crocodash_src \
-            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6 \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             conda run -n CrocoDash --no-capture-output \
               python /workspace/run_domain_sweep.py \
@@ -252,7 +252,7 @@ jobs:
             -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
             -v "${{ github.workspace }}/CrocoDash:/workspace/crocodash_src" \
             -e CROCODASH_ROOT=/workspace/crocodash_src \
-            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6 \
+            -e PYTHONPATH=/workspace/crocodash_src:/workspace/crocodash_src/CrocoDash/rm6:/workspace/crocodash_src/CrocoDash/visualCaseGen \
             ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             /bin/bash /workspace/run_case.sh
 
