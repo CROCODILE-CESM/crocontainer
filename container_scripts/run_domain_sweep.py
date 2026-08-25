@@ -56,7 +56,7 @@ TOPO_MIN_DEPTH = 9.5
 VGRID_NK = 5
 DATE_RANGE = ["2020-01-01 00:00:00", "2020-01-03 00:00:00"]
 
-# DATM%NYF + SROF for the same reason as mom-regional-base.yaml: no JRA55
+# DATM%NYF + SROF for the same reason as example_domain.yaml: no JRA55
 # download, no GLOFAS runoff-mapping file. Nothing here ever runs MOM6, so the
 # atm/rof choice only has to be something CIME will resolve.
 COMPSET = "1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV"

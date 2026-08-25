@@ -13,7 +13,7 @@
 Crocontainer is a pre-built container image that lets you run a [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash)-configured CESM regional ocean case anywhere — on your laptop or on an HPC system like Derecho — without installing CESM, ESMF, or MPI yourself.
 
 The primary workflow is:
-1. **Write** a CrocoDash YAML case config to configure your regional ocean domain — see `container_scripts/regional_configs/mom-regional-base.yaml` for a working example (keep its `case.caseroot`/`case.inputdir` as they are — `run_case.sh` expects the case at `/workspace/case`).
+1. **Write** a CrocoDash YAML case config to configure your regional ocean domain — see `container_scripts/regional_configs/example_domain.yaml` for a working example (keep its `case.caseroot`/`case.inputdir` as they are — `run_case.sh` expects the case at `/workspace/case`).
 2. **Run** the container with your edited YAML config mounted as `/workspace/case_config.yaml` — it builds, configures, and executes the case inside via the `crocodash` CLI. No script to write or mount.
 
 If you need features from a CrocoDash version newer than what's in the container image, see [Bundle Mode](#bundle-mode-when-your-crocodash-is-newer-than-the-container) instead.
@@ -56,7 +56,7 @@ Clone this repository (to get a starting template config and helper scripts), cr
 
 ```bash
 mkdir -p cesm_scratch
-cp container_scripts/regional_configs/mom-regional-base.yaml my_case_config.yaml
+cp container_scripts/regional_configs/example_domain.yaml my_case_config.yaml
 # edit my_case_config.yaml for your domain (see below) -- set case.caseroot to
 # /workspace/case and case.inputdir to /workspace/inputdir, then:
 
@@ -83,7 +83,7 @@ The container includes a full CESM checkout at `/workspace/CESM` and the `CrocoD
 
 One of a YAML config or a [bundle](#bundle-mode-when-your-crocodash-is-newer-than-the-container) must be mounted -- `run_case.sh` exits with an error otherwise.
 
-`container_scripts/regional_configs/mom-regional-base.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) for your own case. Edit a copy of it to configure:
+`container_scripts/regional_configs/example_domain.yaml` is a ready-to-use template in CrocoDash's YAML case config format (see `crocodash create --config` / `CrocoDash.recipe`) for your own case. Edit a copy of it to configure:
 
 - **Domain**: `grid.xstart`, `grid.ystart`, `grid.lenx`, `grid.leny`
 - **Resolution**: `grid.resolution`
@@ -167,7 +167,7 @@ git clone https://github.com/CROCODILE-CESM/crocontainer ~/crocontainer
 cd ~/crocontainer
 bash scripts/download_nyf_inputdata.sh ~/cesm_nyf_inputdata
 mkdir -p ~/cesm_scratch
-cp container_scripts/regional_configs/mom-regional-base.yaml my_case_config.yaml
+cp container_scripts/regional_configs/example_domain.yaml my_case_config.yaml
 # edit my_case_config.yaml for your domain (set case.caseroot to /workspace/case
 # and case.inputdir to /workspace/inputdir), then:
 

@@ -17,7 +17,7 @@ unset NCAR_HOST
 #   2. Mount a `crocodash bundle` output directory as /workspace/bundle to
 #      reconstruct a case shared from another machine/user.
 # One of the two must be mounted -- there's no built-in demo case fallback.
-# container_scripts/regional_configs/mom-regional-base.yaml is a ready-to-run
+# container_scripts/regional_configs/example_domain.yaml is a ready-to-run
 # example for mode 1.
 if [[ -f /workspace/case_config.yaml ]]; then
     crocodash create --config /workspace/case_config.yaml --override
