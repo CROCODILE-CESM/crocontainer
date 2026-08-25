@@ -1,0 +1,61 @@
+# A small, ready-to-run CrocoDash case config for this container.
+#
+# Mount it as /workspace/case_config.yaml and run_case.sh will build and run
+# it end to end (see the README's Quick Start). Copy it and edit the values
+# below for your own domain; keep case.caseroot and case.inputdir as they are,
+# since run_case.sh expects the case at /workspace/case.
+#
+# The choices here are all about needing nothing from the network:
+#
+#   DATM%NYF (not JRA)     NYF's T62 atm forcing is small and pre-staged by
+#                          scripts/download_nyf_inputdata.sh; JRA55 is not.
+#   SROF (not DROF%GLOFAS) no runoff grid or mapping file needed.
+#   topo type: flat        no GEBCO subset to fetch.
+#   reference_ocean        synthetic, deterministic OBC/IC forcing generated
+#                          in memory -- no GLORYS download, no credentials.
+#   tides / chlorophyll    left unconfigured, so off. Both are opt-in in
+#                          CrocoDash, so no TPXO or SeaWiFS input is needed.
+#
+# There is no registered CESM alias for this compset -- the long name below is
+# the way to ask for it.
+#
+# reference_ocean arrives with CrocoDash PR #265
+# (https://github.com/CROCODILE-CESM/CrocoDash/pull/265). The CrocoDash
+# submodule pointer must be on or past it for this config to import.
+
+crocodash:
+  # 10x10 cells. Deliberately tiny: the first CI run of a 60x60 version
+  # exhausted the GitHub-hosted runner's ~14GB disk after 44 minutes. This is
+  # a smoke test, not a science case.
+  grid:
+    resolution: 0.1
+    xstart: 278.0
+    lenx: 1.0
+    ystart: 7.0
+    leny: 1.0
+    name: panama1
+
+  topo:
+    min_depth: 9.5
+    source:
+      type: flat
+      depth: 1000.0
+
+  vgrid:
+    type: hyperbolic
+    nk: 10
+    ratio: 20.0
+
+  case:
+    cesmroot: /workspace/CESM
+    caseroot: /workspace/case
+    inputdir: /workspace/inputdir
+    compset: 1850_DATM%NYF_SLND_SICE_MOM6%REGIONAL_SROF_SGLC_SWAV
+    atm_grid_name: T62
+    machine: ubuntu-latest
+    project: PROJ123
+
+  forcings:
+    date_range: ["2000-01-01 00:00:00", "2000-01-05 00:00:00"]
+    product_name: reference_ocean
+    function_name: get_reference_ocean_data

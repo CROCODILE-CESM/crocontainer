@@ -8,7 +8,7 @@ export USER=root
 export DIN_LOC_ROOT=/root/cesm/inputdata
 unset NCAR_HOST
 
-# Case setup -- three modes, checked in order:
+# Case setup -- two modes, checked in order:
 #   1. Mount a CrocoDash YAML case config as /workspace/case_config.yaml to
 #      build any case directly via the CLI (general-purpose mode). Its
 #      case.caseroot/inputdir must be /workspace/case and /workspace/inputdir
@@ -16,9 +16,9 @@ unset NCAR_HOST
 #        docker run -v /path/to/your_config.yaml:/workspace/case_config.yaml ...
 #   2. Mount a `crocodash bundle` output directory as /workspace/bundle to
 #      reconstruct a case shared from another machine/user.
-#   3. Neither mounted: fall back to the built-in Panama demo case (baked
-#      into the image), which stages pre-fetched test data since CI/demo
-#      environments have no live data-access credentials.
+# One of the two must be mounted -- there's no built-in demo case fallback.
+# container_scripts/regional_configs/example_domain.yaml is a ready-to-run
+# example for mode 1.
 if [[ -f /workspace/case_config.yaml ]]; then
     crocodash create --config /workspace/case_config.yaml --override
 elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
@@ -31,7 +31,9 @@ elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
         --project PROJ123 \
         --plan '{"xml_files": true, "user_nl": true, "source_mods": true, "xmlchanges": false}'
 else
-    bash /workspace/panama_demo_setup.sh
+    echo "Mount a CrocoDash YAML case config at /workspace/case_config.yaml, or a" >&2
+    echo "\`crocodash bundle\` output directory at /workspace/bundle. See the README." >&2
+    exit 1
 fi
 
 conda deactivate
@@ -98,5 +100,104 @@ CORE_IAF_JRA.V_10:datafiles = ${BASE}.v_10.TL319.${YR_PREV}.171019.nc,${BASE}.v_
 EOF
 fi
 
-./case.build
+# Three optional env knobs follow, all for CI. None is set in normal use, so
+# the default path through this script is unchanged: build, then run.
+#
+#   CROC_DEBUG_BUILD=1       build with DEBUG=TRUE
+#   CROC_BUILD_ONLY=1        build, save the build tree to $CROC_BUILD_ARCHIVE, stop
+#   CROC_BUILD_ARCHIVE=path  with CROC_BUILD_ONLY, where to write it;
+#                            otherwise, a build tree to restore instead of compiling
+#
+# Build sharing is sound because MOM6's executable does not depend on the
+# domain: CrocoDash always sets MOM6_MEMORY_MODE=dynamic_symmetric, so
+# NIGLOBAL/NJGLOBAL are read from MOM_input at runtime rather than compiled in.
+# One build therefore serves every grid using the same compset, machine and
+# compiler, which is what lets several domain jobs share a single compile.
+
+# Debug builds (-fcheck=bounds, FP traps) catch out-of-bounds access and NaNs
+# that an optimised build runs straight past -- the failure mode a regional
+# grid with open boundaries is most likely to hide. Off by default: slower to
+# build and slower to run.
+if [[ -n "${CROC_DEBUG_BUILD:-}" ]]; then
+    ./xmlchange DEBUG=TRUE
+    echo "Building with DEBUG=TRUE"
+fi
+
+if [[ -n "${CROC_BUILD_ONLY:-}" ]]; then
+    ./case.build
+    EXEROOT=$(./xmlquery EXEROOT --value)
+    SHAREDLIBROOT=$(./xmlquery SHAREDLIBROOT --value)
+    # Absolute paths, restored to the same locations on the other side --
+    # workable only because every case here lives at /workspace/case in this
+    # same image, so EXEROOT is identical across jobs.
+    tar czf "${CROC_BUILD_ARCHIVE:-/workspace/build.tgz}" \
+        -C / "${EXEROOT#/}" "${SHAREDLIBROOT#/}"
+    echo "Saved build tree to ${CROC_BUILD_ARCHIVE:-/workspace/build.tgz}"
+    exit 0
+fi
+
+if [[ -n "${CROC_BUILD_ARCHIVE:-}" ]]; then
+    # Restored after case creation, not before: crocodash create --override
+    # rebuilds the case directory, and EXEROOT may sit beneath it.
+    tar xzf "${CROC_BUILD_ARCHIVE}" -C /
+    ./xmlchange BUILD_COMPLETE=TRUE
+    echo "Restored prebuilt MOM6 from ${CROC_BUILD_ARCHIVE}; skipping case.build"
+else
+    ./case.build
+fi
+
+# `case.submit --no-batch` exits 0 even when the model died: CIME writes
+# "case.run error" / "RUN FAIL" into CaseStatus and then logs "case.submit
+# success" on the next line. Trusting its exit status makes a blown-up run
+# indistinguishable from a good one -- an arctic_cap case that hit "FATAL:
+# ... extreme surface values" and produced no restart still reported success.
+# CaseStatus is the actual record of what happened, so read that.
+check_run_status() {
+    if [[ ! -f CaseStatus ]]; then
+        echo "No CaseStatus -- the run never started" >&2
+        return 1
+    fi
+    if grep -qE "case\.run error|model execution error|RUN FAIL" CaseStatus; then
+        echo "MOM6 run FAILED (see CaseStatus and cesm.log):" >&2
+        grep -E "case\.run error|model execution error|RUN FAIL" CaseStatus >&2
+        return 1
+    fi
+    if ! grep -q "case\.run success" CaseStatus; then
+        echo "CaseStatus records no 'case.run success' -- run did not complete" >&2
+        return 1
+    fi
+    return 0
+}
+
+# Optionally keep what the run produced. CI uploads this as an artifact, so a
+# failed run is inspectable after the fact instead of only through whatever
+# reached stdout -- MOM6's own diagnosis usually lands in ocn.log/cesm.log
+# rather than on the console.
+#
+#   CROC_RUN_ARCHIVE=path    tar RUNDIR (plus a few caseroot files) here
+#
+# Written whether the run succeeds or fails, and the run's exit status is
+# preserved, because the failing case is the one worth looking at.
+if [[ -n "${CROC_RUN_ARCHIVE:-}" ]]; then
+    rc=0
+    ./case.submit --no-batch || rc=$?
+    # Checked even when submit exited 0 -- see check_run_status above.
+    if [[ $rc -eq 0 ]]; then check_run_status || rc=$?; fi
+
+    RUNDIR=$(./xmlquery RUNDIR --value)
+    STAGE=$(mktemp -d)
+    mkdir -p "${STAGE}/rundir" "${STAGE}/caseroot"
+    cp -a "${RUNDIR}/." "${STAGE}/rundir/" 2>/dev/null || true
+    # The case-side files needed to make sense of the logs: what MOM6 was
+    # actually told to do, and how far the case got.
+    for f in user_nl_mom CaseStatus CaseDocs/MOM_input CaseDocs/MOM_override; do
+        [[ -e "$f" ]] && cp -a "$f" "${STAGE}/caseroot/" 2>/dev/null || true
+    done
+    tar czf "${CROC_RUN_ARCHIVE}" -C "${STAGE}" . || true
+    rm -rf "${STAGE}"
+    echo "Saved run output to ${CROC_RUN_ARCHIVE} (exit ${rc})"
+    exit $rc
+fi
+
 ./case.submit --no-batch
+check_run_status
