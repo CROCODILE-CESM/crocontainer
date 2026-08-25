@@ -12,6 +12,18 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 8 * * 2'  # Tuesday 8am UTC
+  workflow_call:
+    inputs:
+      image:
+        description: Container image to test. Defaults to the published latest-amd64.
+        type: string
+        required: false
+
+env:
+  # Every podman invocation below pulls this. Overridable through workflow_call
+  # so crocodash-main.yml can gate a candidate image before it is published --
+  # nothing else should need to set it.
+  IMAGE: ${{ inputs.image || 'ghcr.io/crocodile-cesm/crocontainer:latest-amd64' }}
 
 jobs:
   smoke-test:
@@ -28,7 +40,7 @@ jobs:
 
       - name: Verify container environment
         run: |
-          podman run --rm --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+          podman run --rm --platform linux/amd64 "$IMAGE" \
             bash -c "
               source /opt/conda/etc/profile.d/conda.sh && \
               conda activate CrocoDash && \

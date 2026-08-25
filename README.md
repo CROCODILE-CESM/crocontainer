@@ -392,7 +392,7 @@ The Dockerfile:
 
 ### CI/CD
 
-Four GitHub Actions workflows handle CI/CD. Three of them carry a badge at the top of this README.
+Five GitHub Actions workflows handle CI/CD. Three of them carry a badge at the top of this README.
 
 **Build** (`.github/workflows/build.yml`): builds and pushes multi-arch images automatically.
 - **Trigger**: every Monday at 6am UTC, on version tags (`v*.*.*`), or manually via `workflow_dispatch`
@@ -411,5 +411,19 @@ Four GitHub Actions workflows handle CI/CD. Three of them carry a badge at the t
 - **`domain-mom6-build`**: builds CESM+MOM6 once per run and uploads it as a run-scoped artifact -- the executable is domain-independent (`MOM6_MEMORY_MODE=dynamic_symmetric`), so every domain job below shares this one compile. Built fresh each run rather than cached, so build regressions still surface
 - **`domain-mom6-run`**: one matrix job per selected domain -- restores that build and actually runs MOM6 on the domain, uploading `RUNDIR` as an artifact. Replaced a CIME `create_test` suite that checked the same thing on one hardcoded grid; adding a domain here is a row in CrocoDash's `tests/fixtures/domains.py`, not an upstream `testlist_mom.xml` entry plus testmods dir plus image rebuild
 - **`domain-mom6-debug`**: the same, on one domain, built with `DEBUG=TRUE` -- bounds checks and FP traps that the optimised build runs straight past
+
+**Track CrocoDash main** (`.github/workflows/crocodash-main.yml`): keeps the published image in step with CrocoDash's `main` branch. Runs daily, and on demand.
+
+The image bakes CrocoDash in (`COPY CrocoDash/` in the Dockerfile), so picking up new CrocoDash means moving the submodule and rebuilding — a plain rebuild produces a byte-identical image. Each run:
+
+1. compares the `CrocoDash` submodule pointer against CrocoDash `main`'s tip, and stops if they match;
+2. checks that tip out in the working tree and builds an **amd64-only** image, pushed as `crocodash-<sha>-amd64`;
+3. runs the smoke test, the full domain sweep, and the MOM6 runs against *that* tag;
+4. only if all three pass, retags it to `latest-amd64` and opens a PR bumping the submodule pointer.
+
+So a CrocoDash commit cannot publish itself: a broken `main` leaves `latest-amd64` untouched, and the pointer ends up recording the newest CrocoDash `main` that is *known to work in the container*, not merely the newest that exists. The three test workflows take an optional `image` input via `workflow_call` for this; everything else uses the published `latest-amd64`.
+
+Two deliberate limits. The rebuild is amd64 only — every CI consumer pulls `latest-amd64`, and arm64 under QEMU has taken upwards of four hours, which is far too much to spend daily; `build.yml`'s weekly run stays multi-arch and keeps arm64 and the merged `latest` manifest current. And the pointer-bump PR shows no checks of its own, because PRs opened with `GITHUB_TOKEN` do not start workflow runs — the gate that matters already ran in the tracker.
+
 
 The MOM6 jobs run a chosen subset of the catalog, not all of it. **`arctic_cap` is a known failure and is currently excluded.** Its forcing is produced fine — it passes the domain sweep — and MOM6 initializes on it cleanly, but the run goes unstable on the first coupled step: NaN SSH on the boundary, then `FATAL: extreme surface values`. Most likely the test configuration rather than a CrocoDash bug, since a polar cap with flat bathymetry, no land, and open boundaries across the pole is not a physically sensible case to integrate. It will be added back to the matrix once it runs.

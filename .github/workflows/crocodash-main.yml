@@ -1,0 +1,224 @@
+name: Track CrocoDash main
+# Keeps the published container in step with CrocoDash's main branch.
+#
+# The image bakes CrocoDash in -- Dockerfile does COPY CrocoDash/ -- so a plain
+# rebuild produces a byte-identical image. Picking up new CrocoDash means moving
+# the submodule to main's tip and rebuilding from that.
+#
+# A CrocoDash commit is not allowed to publish itself. The rebuild goes to a
+# candidate tag, the full test suite runs against that tag, and only a green
+# suite promotes it to latest-amd64 -- so a bad CrocoDash main cannot break
+# everyone pulling the container. The submodule pointer bump is then proposed as
+# a PR, which makes the pointer a record of the newest CrocoDash main that is
+# known to work in the container rather than one that merely exists.
+#
+# Polls rather than being pushed to: a repository_dispatch from CrocoDash would
+# be faster, but it needs a PAT with write access to this repo stored as a
+# secret over there. Daily is comfortably fine for something whose rebuild alone
+# takes half an hour.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # daily, 3am UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild and gate even if CrocoDash main has not moved
+        type: boolean
+        default: false
+
+# One tracker at a time: two overlapping runs would race on the candidate tag
+# and on the pointer-bump branch.
+concurrency:
+  group: track-crocodash-main
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: crocodile-cesm/crocontainer
+  CESM_BRANCH: full_regional_cesm_alpha09d
+  CROCODASH_REPO: https://github.com/CROCODILE-CESM/CrocoDash.git
+  BUMP_BRANCH: crocodash-main-tracker
+
+jobs:
+  check:
+    name: Has CrocoDash main moved?
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.check.outputs.sha }}
+      short: ${{ steps.check.outputs.short }}
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      # No submodules: the pointer is read out of the tree, and the ~GB of
+      # CrocoDash content is only needed by the build job below.
+      - uses: actions/checkout@v4
+
+      - name: Compare the submodule pointer with CrocoDash main
+        id: check
+        run: |
+          PINNED=$(git ls-tree HEAD CrocoDash | awk '{print $3}')
+          TIP=$(git ls-remote "${CROCODASH_REPO}" refs/heads/main | cut -f1)
+          echo "pinned here:      ${PINNED}"
+          echo "CrocoDash main:   ${TIP}"
+          echo "sha=${TIP}"                >> "$GITHUB_OUTPUT"
+          echo "short=${TIP:0:7}"          >> "$GITHUB_OUTPUT"
+          if [[ "${PINNED}" == "${TIP}" && "${{ inputs.force }}" != "true" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Already on CrocoDash main -- nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "CrocoDash main is at \`${TIP:0:7}\`; the container is on \`${PINNED:0:7}\`. Rebuilding." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+  build-candidate:
+    name: Build candidate image
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    # amd64 only. Every consumer of this workflow's output pulls latest-amd64,
+    # and arm64 builds under QEMU have taken upwards of four hours -- far too
+    # much to spend daily. build.yml's weekly run stays multi-arch and keeps
+    # arm64 and the merged `latest` manifest current.
+    timeout-minutes: 240
+    outputs:
+      image: ${{ steps.tag.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Move CrocoDash to main's tip
+        # Working-tree only -- deliberately not committed. The pointer bump is
+        # proposed as a PR at the end, and only if the suite passed.
+        run: |
+          git -C CrocoDash fetch --depth 1 origin "${{ needs.check.outputs.sha }}"
+          git -C CrocoDash checkout --detach FETCH_HEAD
+          git -C CrocoDash submodule update --init --recursive
+          echo "CrocoDash now at $(git -C CrocoDash rev-parse --short HEAD)"
+
+      - name: Name the candidate tag
+        id: tag
+        # Tagged by the CrocoDash commit it was built from, not by "candidate",
+        # so concurrent or repeated runs cannot overwrite each other's image and
+        # a failed gate leaves an inspectable artifact behind.
+        run: |
+          echo "image=${REGISTRY}/${IMAGE_NAME}:crocodash-${{ needs.check.outputs.short }}-amd64" \
+            >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the candidate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            CESM_BRANCH=${{ env.CESM_BRANCH }}
+          tags: ${{ steps.tag.outputs.image }}
+          # Shares build.yml's amd64 cache, so everything below the CrocoDash
+          # COPY layer -- ESMF, CESM, the conda env -- is reused.
+          cache-from: type=gha,scope=linux/amd64
+          cache-to: type=gha,mode=max,scope=linux/amd64
+
+  # The gate. The same three workflows that guard a pull request, pointed at the
+  # candidate tag instead of the published one.
+  gate-smoke:
+    name: "Gate: smoke"
+    needs: [check, build-candidate]
+    uses: ./.github/workflows/container-test.yml
+    with:
+      image: ${{ needs.build-candidate.outputs.image }}
+
+  gate-sweep:
+    name: "Gate: domain sweep"
+    needs: [check, build-candidate]
+    uses: ./.github/workflows/domain-sweep.yml
+    with:
+      image: ${{ needs.build-candidate.outputs.image }}
+
+  gate-mom6:
+    name: "Gate: MOM6"
+    needs: [check, build-candidate]
+    uses: ./.github/workflows/mom6-runs.yml
+    with:
+      image: ${{ needs.build-candidate.outputs.image }}
+
+  promote:
+    name: Promote and propose the bump
+    needs: [check, build-candidate, gate-smoke, gate-sweep, gate-mom6]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote the candidate to latest-amd64
+        # Retag, not rebuild: the exact image the suite just passed on is the
+        # one published. `latest` (the multi-arch manifest) is deliberately left
+        # alone -- arm64 was not rebuilt here, so republishing the manifest
+        # would pair a new amd64 with a stale arm64. build.yml refreshes both.
+        run: |
+          docker buildx imagetools create \
+            --tag "${REGISTRY}/${IMAGE_NAME}:latest-amd64" \
+            "${{ needs.build-candidate.outputs.image }}"
+
+      - name: Propose the submodule pointer bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ needs.check.outputs.sha }}
+          SHORT: ${{ needs.check.outputs.short }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${BUMP_BRANCH}"
+          # Writes the gitlink directly, so this job never has to check out the
+          # submodule's contents just to move a pointer.
+          git update-index --add --cacheinfo "160000,${SHA},CrocoDash"
+          git commit -m "Bump CrocoDash to ${SHORT} (CrocoDash main)" \
+                     -m "Built and tested as ${{ needs.build-candidate.outputs.image }}, promoted to latest-amd64."
+          git push -f origin "${BUMP_BRANCH}"
+
+          BODY=$(cat <<EOF
+          CrocoDash \`main\` moved to [\`${SHORT}\`](https://github.com/CROCODILE-CESM/CrocoDash/commit/${SHA}).
+
+          The container was rebuilt against it and the full suite -- smoke test,
+          17-domain sweep, and the MOM6 runs -- passed, so
+          \`${{ needs.build-candidate.outputs.image }}\` has already been promoted to
+          \`latest-amd64\`. This PR records that in the submodule pointer.
+
+          Opened by \`.github/workflows/crocodash-main.yml\`.
+          Note that PRs opened with \`GITHUB_TOKEN\` do not start workflow runs, so
+          this one shows no checks of its own -- the gate that matters ran in
+          [the tracker run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+          EOF
+          )
+          if gh pr view "${BUMP_BRANCH}" --json number >/dev/null 2>&1; then
+            gh pr edit "${BUMP_BRANCH}" --title "Bump CrocoDash to ${SHORT}" --body "${BODY}"
+            echo "Updated the existing pointer-bump PR." >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh pr create --base main --head "${BUMP_BRANCH}" \
+              --title "Bump CrocoDash to ${SHORT}" --body "${BODY}"
+            echo "Opened a pointer-bump PR." >> "$GITHUB_STEP_SUMMARY"
+          fi
