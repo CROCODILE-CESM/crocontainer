@@ -9,7 +9,11 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: crocodile-cesm/crocontainer
-  CESM_BRANCH: full_regional_cesm_alpha09d
+  # Must stay in step with what visualCaseGen asserts in
+  # _check_cime_compatibility(): full_regional_cesm carries cime6.4.1, which is
+  # what current CrocoDash requires. The alpha09d branch was only ever a
+  # cache-busting rename (see 4cfce86) and has been left behind at cime6.2.2.
+  CESM_BRANCH: full_regional_cesm
 
 jobs:
   build-and-push:
@@ -57,6 +61,22 @@ jobs:
         id: arch
         run: echo "suffix=$(echo ${{ matrix.platform }} | cut -d/ -f2)" >> $GITHUB_OUTPUT
 
+      # Docker keys the CESM clone layer on the build-args that feed it, so a
+      # branch name alone pins that layer forever: every weekly rebuild happily
+      # reused a clone taken the first time this arg value was seen, and new
+      # commits on the branch never made it into the image. That is why
+      # 4cfce86 had to invent a new branch name just to force a cache miss.
+      # Resolving the tip here instead means the layer busts exactly when the
+      # branch actually moves, and never otherwise.
+      - name: Resolve CESM branch tip
+        id: cesm
+        run: |
+          SHA=$(git ls-remote https://github.com/CROCODILE-CESM/CESM \
+                  refs/heads/${{ env.CESM_BRANCH }} | cut -f1)
+          test -n "$SHA" || { echo "::error::CESM branch ${{ env.CESM_BRANCH }} not found"; exit 1; }
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "CESM ${{ env.CESM_BRANCH }} is at $SHA"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -66,6 +86,7 @@ jobs:
           push: true
           build-args: |
                 CESM_BRANCH=${{ env.CESM_BRANCH }}
+                CESM_SHA=${{ steps.cesm.outputs.sha }}
           tags: |
                 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.arch.outputs.suffix }}
                 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-${{ steps.arch.outputs.suffix }}

@@ -326,7 +326,7 @@ Because this is a `user_nl` file, it is captured by `crocodash bundle` and carri
 
 | Path | Contents |
 |---|---|
-| `/workspace/CESM` | Full CESM checkout (branch `full_regional_cesm_alpha09d`) |
+| `/workspace/CESM` | Full CESM checkout (branch `full_regional_cesm`) |
 | `/workspace/CrocoDash` | CrocoDash installation + conda environment named `CrocoDash` |
 | `/workspace/case_config.yaml` | Mount point for your own YAML case config (YAML config mode) |
 | `/workspace/bundle` | Mount point for your case bundle |

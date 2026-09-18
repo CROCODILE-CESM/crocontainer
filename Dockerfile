@@ -67,10 +67,17 @@ RUN apt-get update && apt-get install -y curl && \
     rm -rf /var/lib/apt/lists/*
 
 # --- CESM ---
-ARG CESM_BRANCH=full_regional_cesm_alpha09d
+ARG CESM_BRANCH=full_regional_cesm
+# Tip of CESM_BRANCH, supplied by the build workflow. Not used to check
+# anything out -- it is here so this layer's cache key follows the branch
+# contents rather than just its name, which is what kept stale CESM clones
+# alive across rebuilds. The clone stays on the branch so a local `docker
+# build` without this arg still works.
+ARG CESM_SHA=unpinned
 ENV CESMROOT=/workspace/CESM
 WORKDIR /workspace
-RUN git clone --depth 1 https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b ${CESM_BRANCH} && \
+RUN echo "Cloning CESM ${CESM_BRANCH} (tip ${CESM_SHA})" && \
+    git clone --depth 1 https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b ${CESM_BRANCH} && \
     cd ${CESMROOT} && ./bin/git-fleximod update
 
 # --- CROCODASH ENV ---
