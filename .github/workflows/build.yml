@@ -77,6 +77,29 @@ jobs:
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "CESM ${{ env.CESM_BRANCH }} is at $SHA"
 
+      # `latest*` is what every downstream consumer pulls, but the tag list
+      # below used to name it unconditionally -- so a workflow_dispatch from
+      # any branch republished the shared image from unreviewed code. (The
+      # metadata step above computes an is_default_branch-gated latest and
+      # then nothing consumes it.) Off the default branch, publish only the
+      # sha- tag, which is enough to validate a container change by pinning
+      # to it from CrocoDash CI.
+      - name: Compose image tags
+        id: tags
+        run: |
+          BASE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          SUFFIX=${{ steps.arch.outputs.suffix }}
+          {
+            echo "list<<TAGS_EOF"
+            echo "${BASE}:sha-${{ github.sha }}-${SUFFIX}"
+            if [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ]; then
+              echo "${BASE}:latest-${SUFFIX}"
+            else
+              echo "Not on the default branch -- skipping the latest-${SUFFIX} tag" >&2
+            fi
+            echo "TAGS_EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -87,16 +110,16 @@ jobs:
           build-args: |
                 CESM_BRANCH=${{ env.CESM_BRANCH }}
                 CESM_SHA=${{ steps.cesm.outputs.sha }}
-          tags: |
-                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.arch.outputs.suffix }}
-                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-${{ steps.arch.outputs.suffix }}
+          tags: ${{ steps.tags.outputs.list }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
-  # Merge into a single multi-arch manifest
+  # Merge into a single multi-arch manifest. Only from the default branch --
+  # this job writes the shared `latest` and `sha-<short>` tags.
   manifest:
     needs: build-and-push
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: read
