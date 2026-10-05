@@ -67,10 +67,17 @@ RUN apt-get update && apt-get install -y curl && \
     rm -rf /var/lib/apt/lists/*
 
 # --- CESM ---
-ARG CESM_BRANCH=full_regional_cesm_alpha09d
+ARG CESM_BRANCH=crocodash
+# Resolved by build.yml via git ls-remote. Changing it invalidates this layer, so
+# the image picks up new commits on CESM_BRANCH instead of reusing a stale clone.
+ARG CESM_SHA=unknown
+ARG CROCODASH_SHA=unknown
+LABEL org.crocodile-cesm.cesm-branch=${CESM_BRANCH} \
+      org.crocodile-cesm.cesm-sha=${CESM_SHA} \
+      org.crocodile-cesm.crocodash-sha=${CROCODASH_SHA}
 ENV CESMROOT=/workspace/CESM
 WORKDIR /workspace
-RUN git clone --depth 1 https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b ${CESM_BRANCH} && \
+RUN echo "CESM ${CESM_BRANCH}@${CESM_SHA}" && git clone --depth 1 https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b ${CESM_BRANCH} && \
     cd ${CESMROOT} && ./bin/git-fleximod update
 
 # --- CROCODASH ENV ---
