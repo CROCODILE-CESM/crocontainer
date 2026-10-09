@@ -162,6 +162,8 @@ def run_test(test, cfg, args):
     # The case name sets the CIME build/run dir, so it must be unique per test.
     caseroot = testdir / testdir.name
     testdir.mkdir(parents=True)
+    # crocodash create needs the inputdir's parent to exist already.
+    (args.test_root / "inputdir").mkdir(exist_ok=True)
     log = testdir / "croc_test.log"
 
     def phase(ts, phase_name, ok, comment=""):
