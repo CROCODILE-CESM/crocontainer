@@ -46,6 +46,8 @@ def parse_args():
     p.add_argument("--parallel", type=int, default=1)
     p.add_argument("--ntasks", type=int, default=4,
                    help="MPI tasks per test unless the test sets _P<n>; keep parallel*ntasks <= cores")
+    p.add_argument("--data-ntasks", type=int,
+                   help="MPI tasks for the data atmosphere, data runoff and mediator (default: --ntasks)")
     p.add_argument("--dry-run", action="store_true", help="list the tests and exit")
     p.add_argument("--badge-dir", type=Path,
                    help="also write a shields.io endpoint badge (JSON) per test here")
@@ -101,7 +103,7 @@ def crocodash_config(cfg, args, compset, testdir):
     return out
 
 
-def xmlchanges(caseopts, options, ntasks):
+def xmlchanges(caseopts, options, ntasks, data_ntasks=None):
     changes = []
     for opt in caseopts:
         if opt == "D":
@@ -112,11 +114,17 @@ def xmlchanges(caseopts, options, ntasks):
             ntasks = int(opt[1:])
         else:
             raise ValueError(f"unsupported test option _{opt}")
-    # All components share the same ntasks tasks. Derecho's default launcher
-    # (mpibind) takes every core in the PBS job, which collides when several
-    # tests run at once, so launch exactly ntasks ranks instead.
+    # The tiny ocean, ice and wave grids only decompose onto a few tasks, but
+    # DATM and DROF read global JRA and GLOFAS data: on those few tasks their
+    # initialization alone outlasted an hour. So they and the mediator can get
+    # more, all from ROOTPE 0.
+    data_ntasks = max(data_ntasks or ntasks, ntasks)
     changes.append(f"NTASKS={ntasks},ROOTPE=0")
-    changes.append(f"MPI_RUN_COMMAND=mpiexec -n {ntasks} --cpu-bind none")
+    changes.append(f"NTASKS_ATM={data_ntasks},NTASKS_ROF={data_ntasks},NTASKS_CPL={data_ntasks}")
+    # Derecho's default launcher (mpibind) takes every core in the PBS job,
+    # which collides when several tests run at once, so launch exactly the
+    # ranks the case needs.
+    changes.append(f"MPI_RUN_COMMAND=mpiexec -n {data_ntasks} --cpu-bind none")
     if "wallclock" in options:
         changes.append(f"JOB_WALLCLOCK_TIME={options['wallclock']}")
     return changes
@@ -178,7 +186,7 @@ def run_test(test, cfg, args):
                      run(["crocodash", "create", "--config", config_file, "--override"], log)):
             return
         try:
-            changes = xmlchanges(caseopts, options, args.ntasks)
+            changes = xmlchanges(caseopts, options, args.ntasks, args.data_ntasks)
         except ValueError as e:
             phase(ts, XML_PHASE, False, str(e))
             return

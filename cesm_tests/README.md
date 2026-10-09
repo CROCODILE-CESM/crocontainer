@@ -69,7 +69,7 @@ $TESTROOT/cs.status.<testid>
 | Phase | What it covers |
 |---|---|
 | `CREATE_NEWCASE` | `crocodash create`, including configuring and processing forcings |
-| `XML` | applying the test options, plus `NTASKS=--ntasks` (4) on every component, launched with `mpiexec -n` so parallel tests don't share cores |
+| `XML` | applying the test options, plus `NTASKS=--ntasks` (4) on every component and `--data-ntasks` (56 in the PBS job) on DATM, DROF and the mediator, launched with `mpiexec -n` so parallel tests don't share cores |
 | `SETUP` | `case.setup --reset` (crocodash create already ran case.setup) |
 | `SHAREDLIB_BUILD` / `MODEL_BUILD` | `case.build` |
 | `SUBMIT` / `RUN` | `case.submit --no-batch`; RUN passes only if `CaseStatus` records `case.run success` |

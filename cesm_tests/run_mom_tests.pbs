@@ -9,8 +9,9 @@
 # Runs run_mom_tests.py on one Derecho node: CrocoDash forcing generation (the
 # GLOFAS runoff map) needs more memory than a login node allows, and
 # case.submit --no-batch runs the model right here. Tests run one at a time
-# (4 MPI tasks each): every GLOFAS-runoff case needs tens of GB, and five at
-# once overran 200 GB.
+# (every GLOFAS-runoff case needs tens of GB, and five at once overran 200 GB):
+# 4 MPI tasks for the small ocean, ice and wave grids, 56 for the data
+# atmosphere, data runoff and mediator, which read global data.
 #
 #   qsub -v CESMROOT=~/CESM_crocodash,CONDA_ENV=CrocoDash run_mom_tests.pbs
 #
@@ -56,7 +57,7 @@ python -c "import CrocoDash, regional_mom6; print('CrocoDash from', CrocoDash.__
 
 cd "$PBS_O_WORKDIR"
 BADGES=$TESTROOT/badges.$PBS_JOBID
-python run_mom_tests.py --cesmroot "$CESMROOT" --test-root "$TESTROOT" --parallel 1 --ntasks 4 \
+python run_mom_tests.py --cesmroot "$CESMROOT" --test-root "$TESTROOT" --parallel 1 --ntasks 4 --data-ntasks 56 \
   --badge-dir "$BADGES" ${EXTRA:-}
 
 if [ -n "${PUBLISH:-}" ]; then
