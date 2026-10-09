@@ -17,10 +17,35 @@ git clone -b crocodash https://github.com/CROCODILE-CESM/CESM ~/CESM_crocodash
 
 cd cesm_tests
 qsub -v CESMROOT=$HOME/CESM_crocodash,CONDA_ENV=CrocoDash run_mom_tests.pbs
-# from Casper: qsub -q develop@desched1 ...
+# from Casper: qsub -q main@desched1 ...
 ```
 
 `python run_mom_tests.py --cesmroot ~/CESM_crocodash --test-root /tmp/x --dry-run` lists the tests that would run.
+
+## Weekly runs and README badges
+
+`cron_submit.sh` runs from your crontab on NCAR's cron server. It submits `run_mom_tests.pbs` with:
+- `UPDATE=1`: pull the CESM `crocodash` and CrocoDash `main` clones to their tips first;
+- `PUBLISH=1`: push one badge JSON per test to this repo's `test-results` branch, which the badges in the top-level README read.
+
+PBS mails you when the job ends. The push uses your `gh` login (`gh auth login` once on GLADE).
+
+One-time setup:
+
+```bash
+CI_ROOT=/glade/work/$USER/croc_ci
+git clone https://github.com/CROCODILE-CESM/crocontainer $CI_ROOT/crocontainer
+git clone -b crocodash https://github.com/CROCODILE-CESM/CESM $CI_ROOT/CESM
+(cd $CI_ROOT/CESM && ./bin/git-fleximod update)
+git clone --recursive https://github.com/CROCODILE-CESM/CrocoDash $CI_ROOT/CrocoDash
+
+ssh cron.hpc.ucar.edu
+crontab -e
+# Mondays 02:00:
+0 2 * * 1 /glade/work/$USER/croc_ci/crocontainer/cesm_tests/cron_submit.sh >> /glade/work/$USER/croc_ci/cron.log 2>&1
+```
+
+The `CrocoDash` conda env supplies the dependencies; the clone is put first on `PYTHONPATH`. Update the env when CrocoDash's `environment.yml` gains a dependency.
 
 ## Results
 

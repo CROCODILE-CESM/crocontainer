@@ -18,6 +18,7 @@ Usage (on a Derecho compute node, see run_mom_tests.pbs):
 import argparse
 import copy
 import datetime
+import json
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -46,6 +47,8 @@ def parse_args():
     p.add_argument("--ntasks", type=int, default=4,
                    help="MPI tasks per test unless the test sets _P<n>; keep parallel*ntasks <= cores")
     p.add_argument("--dry-run", action="store_true", help="list the tests and exit")
+    p.add_argument("--badge-dir", type=Path,
+                   help="also write a shields.io endpoint badge (JSON) per test here")
     return p.parse_args()
 
 
@@ -131,6 +134,26 @@ def run_succeeded(caseroot):
     return status.exists() and "case.run success" in status.read_text()
 
 
+def write_badge(testdir, name, badge_dir):
+    """shields.io endpoint JSON: passing, or the first phase that failed."""
+    ts_file = testdir / "TestStatus"
+    lines = ts_file.read_text().splitlines() if ts_file.exists() else []
+    statuses = [line.split()[:3] for line in lines if len(line.split()) >= 3]
+    failed = [phase for status, _, phase in statuses if status == TEST_FAIL_STATUS]
+    passed = any(phase == RUN_PHASE and status == TEST_PASS_STATUS for status, _, phase in statuses)
+    message = "passing" if passed else f"failing: {failed[0]}" if failed else "incomplete"
+    # Keyed without machine/compiler/test id, so each run overwrites last run's badge.
+    testname, grid, compset, *_ = name.split(".")
+    badge = {
+        "schemaVersion": 1,
+        "label": f"{testname} {compset}",
+        "message": f"{message} ({datetime.date.today()})",
+        "color": "brightgreen" if passed else "red",
+    }
+    badge_dir.mkdir(parents=True, exist_ok=True)
+    (badge_dir / f"{testname}.{compset}.json").write_text(json.dumps(badge) + "\n")
+
+
 def run_test(test, cfg, args):
     name, compset, caseopts, options = test
     testdir = args.test_root / f"{name}.{args.test_id}"
@@ -199,6 +222,9 @@ def main():
     with ThreadPoolExecutor(max_workers=args.parallel) as pool:
         list(pool.map(lambda t: run_test(t, cfg, args), tests))
     subprocess.run([str(args.test_root / f"cs.status.{args.test_id}")])
+    if args.badge_dir:
+        for name, *_ in tests:
+            write_badge(args.test_root / f"{name}.{args.test_id}", name, args.badge_dir)
 
 
 if __name__ == "__main__":
