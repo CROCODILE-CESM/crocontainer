@@ -51,7 +51,7 @@ fi
 
 if [ -n "${CROCODASH_SRC:-}" ]; then
   S=$CROCODASH_SRC/CrocoDash
-  export PYTHONPATH=$CROCODASH_SRC:$S/rm6:$S/visualCaseGen:$S/visualCaseGen/ProConPy:$S/visualCaseGen/external/mom6_forge:$CROCODASH_SRC/gallery${PYTHONPATH:+:$PYTHONPATH}
+  export PYTHONPATH=$CROCODASH_SRC:$S/rm6:$S/visualCaseGen:$S/visualCaseGen/ProConPy:$S/visualCaseGen/external/mom6_forge:$S/visualCaseGen/external/ipyfilechooser:$CROCODASH_SRC/gallery${PYTHONPATH:+:$PYTHONPATH}
 fi
 python -c "import CrocoDash, regional_mom6; print('CrocoDash from', CrocoDash.__file__)"
 
