@@ -60,6 +60,5 @@ python run_mom_tests.py --cesmroot "$CESMROOT" --test-root "$TESTROOT" --paralle
   --badge-dir "$BADGES" ${EXTRA:-}
 
 if [ -n "${PUBLISH:-}" ]; then
-  module load gh
   bash publish_badges.sh "$BADGES"
 fi

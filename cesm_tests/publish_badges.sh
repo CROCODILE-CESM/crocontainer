@@ -4,7 +4,8 @@
 #
 #   publish_badges.sh <badge-dir>
 #
-# Uses the gh CLI's stored login for git (`gh auth login` once).
+# Authenticates with the token that `gh auth login` stored in
+# ~/.config/gh/hosts.yml; Derecho has no gh module, so gh itself isn't needed.
 set -euo pipefail
 
 BADGE_DIR=$(cd "$1" && pwd)
@@ -12,7 +13,9 @@ REPO=https://github.com/CROCODILE-CESM/crocontainer
 BRANCH=test-results
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-git_() { git -C "$WORK" -c credential.helper= -c credential.helper='!gh auth git-credential' "$@"; }
+# The helper reads the token when git asks, so it never shows up in `ps`.
+HELPER='!f() { echo username=x-access-token; awk '\''/oauth_token:/ {print "password=" $2; exit}'\'' ~/.config/gh/hosts.yml; }; f'
+git_() { git -C "$WORK" -c credential.helper= -c credential.helper="$HELPER" "$@"; }
 
 if git ls-remote --exit-code --heads "$REPO" "$BRANCH" >/dev/null; then
   git clone -q --depth 1 -b "$BRANCH" "$REPO" "$WORK"

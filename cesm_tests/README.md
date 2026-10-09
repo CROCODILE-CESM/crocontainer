@@ -28,7 +28,7 @@ qsub -v CESMROOT=$HOME/CESM_crocodash,CONDA_ENV=CrocoDash run_mom_tests.pbs
 - `UPDATE=1`: reset this repo and the CESM and CrocoDash clones to their branch tips first (the cron server has no git, so the job does this). The branches tested are whatever the clones have checked out, e.g. `git -C $CI_ROOT/CrocoDash checkout main`;
 - `PUBLISH=1`: push one badge JSON per test to this repo's `test-results` branch, which the badges in the top-level README read.
 
-PBS mails you when the job ends. The push uses your `gh` login (`gh auth login` once on GLADE).
+PBS mails you when the job ends. The push uses the token from your `gh` login (`gh auth login` once on GLADE, e.g. on Casper).
 
 One-time setup:
 
