@@ -2,6 +2,18 @@
 
 [![CESM runs in container](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/container-test.yml/badge.svg)](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/container-test.yml)
 
+### Regional coupled tests on Derecho
+
+Weekly runs of MOM_interface's regional smoke tests on cases built by the latest CrocoDash `main` and CESM `crocodash` (see [`cesm_tests/`](cesm_tests/README.md)):
+
+| Compset | Components | SMS_D_Ld2 |
+|---|---|---|
+| `CR_JRA_GLOFAS` | MOM6 + GLOFAS runoff | ![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.CR_JRA_GLOFAS.json) |
+| `CR1850MARBL_JRA_GLOFAS` | + MARBL | ![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.CR1850MARBL_JRA_GLOFAS.json) |
+| `GR_JRA_GLOFAS` | + CICE | ![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.GR_JRA_GLOFAS.json) |
+| `CWR_JRA_GLOFAS` | + WW3 | ![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.CWR_JRA_GLOFAS.json) |
+| `GWR1850MARBL_JRA_GLOFAS` | MOM6 + CICE + WW3 + MARBL + GLOFAS | ![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.GWR1850MARBL_JRA_GLOFAS.json) |
+
 Crocontainer is a pre-built container image that lets you run a [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash)-configured CESM regional ocean case anywhere — on your laptop or on an HPC system like Derecho — without installing CESM, ESMF, or MPI yourself.
 
 The primary workflow is:
