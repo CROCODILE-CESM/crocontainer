@@ -21,7 +21,8 @@
 # TESTROOT  : where test dirs go (default: /glade/derecho/scratch/$USER/croc_tests)
 # CROCODASH_SRC : optional CrocoDash checkout (with submodules) to test instead
 #                 of the one installed in CONDA_ENV, e.g. a clone of main
-# UPDATE    : if set, reset CESMROOT and CROCODASH_SRC to their branch tips first# PUBLISH   : if set, push one README badge per test to the test-results branch
+# UPDATE    : if set, reset this repo, CESMROOT and CROCODASH_SRC to their branch tips first
+# PUBLISH   : if set, push one README badge per test to the test-results branch
 # EXTRA     : extra args for run_mom_tests.py, e.g. "--only MARBL"
 set -euo pipefail
 
@@ -37,6 +38,8 @@ export ESMFMKFILE=$CONDA_PREFIX/lib/esmf.mk
 if [ -n "${UPDATE:-}" ]; then
   # These are CI-only clones: follow each branch tip, even across force-pushes.
   sync() { git -C "$1" fetch -q && git -C "$1" reset -q --hard '@{u}'; }
+  # This repo too (PBS already holds its own copy of this script).
+  sync "$PBS_O_WORKDIR"
   sync "$CESMROOT"
   (cd "$CESMROOT" && ./bin/git-fleximod update)
   if [ -n "${CROCODASH_SRC:-}" ]; then

@@ -1,0 +1,13 @@
+CrocoDash from /glade/u/home/manishrv/documents/croc/worktrees/CrocoDash-reference-ice-full-restart/CrocoDash/__init__.py
+refice1: 1 test
+  SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash (Overall: PASS) details:
+    PASS SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash CREATE_NEWCASE
+    PASS SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash XML
+    PASS SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash SETUP
+    PASS SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash SHAREDLIB_BUILD
+    PASS SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash MODEL_BUILD
+    PASS SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash SUBMIT
+    PASS SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash RUN
+
+ 
+SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash

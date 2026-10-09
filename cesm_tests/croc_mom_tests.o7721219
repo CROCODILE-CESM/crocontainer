@@ -1,0 +1,19 @@
+CrocoDash from /glade/u/home/manishrv/documents/croc/worktrees/CrocoDash-cesm-crocodash-branch/CrocoDash/__init__.py
+lab1: 5 tests
+  SMS_D_Ld2.USER_RES.CR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash (Overall: FAIL) details:
+    FAIL SMS_D_Ld2.USER_RES.CR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash CREATE_NEWCASE see /glade/derecho/scratch/manishrv/croc_tests/SMS_D_Ld2.USER_RES.CR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash.lab1/croc_test.log
+  SMS_D_Ld2.USER_RES.CR_JRA_GLOFAS.derecho_intel.crocodash (Overall: FAIL) details:
+    FAIL SMS_D_Ld2.USER_RES.CR_JRA_GLOFAS.derecho_intel.crocodash CREATE_NEWCASE see /glade/derecho/scratch/manishrv/croc_tests/SMS_D_Ld2.USER_RES.CR_JRA_GLOFAS.derecho_intel.crocodash.lab1/croc_test.log
+  SMS_D_Ld2.USER_RES.CWR_JRA_GLOFAS.derecho_intel.crocodash (Overall: FAIL) details:
+    FAIL SMS_D_Ld2.USER_RES.CWR_JRA_GLOFAS.derecho_intel.crocodash CREATE_NEWCASE see /glade/derecho/scratch/manishrv/croc_tests/SMS_D_Ld2.USER_RES.CWR_JRA_GLOFAS.derecho_intel.crocodash.lab1/croc_test.log
+  SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash (Overall: FAIL) details:
+    FAIL SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash CREATE_NEWCASE see /glade/derecho/scratch/manishrv/croc_tests/SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash.lab1/croc_test.log
+  SMS_D_Ld2.USER_RES.GWR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash (Overall: FAIL) details:
+    FAIL SMS_D_Ld2.USER_RES.GWR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash CREATE_NEWCASE see /glade/derecho/scratch/manishrv/croc_tests/SMS_D_Ld2.USER_RES.GWR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash.lab1/croc_test.log
+
+ 
+SMS_D_Ld2.USER_RES.CR_JRA_GLOFAS.derecho_intel.crocodash
+SMS_D_Ld2.USER_RES.CR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash
+SMS_D_Ld2.USER_RES.GR_JRA_GLOFAS.derecho_intel.crocodash
+SMS_D_Ld2.USER_RES.CWR_JRA_GLOFAS.derecho_intel.crocodash
+SMS_D_Ld2.USER_RES.GWR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash
