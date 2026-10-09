@@ -86,7 +86,9 @@ def crocodash_config(cfg, args, compset, testdir):
         **cfg.get("case", {}),
         "cesmroot": str(args.cesmroot),
         "caseroot": str(testdir / testdir.name),
-        "inputdir": str(testdir / "inputdir"),
+        # Not under testdir: MOM6 holds INPUTDIR in 128 characters and silently
+        # drops the slash it appends, so the long test names broke every path.
+        "inputdir": str(args.test_root / "inputdir" / f"{compset}.{args.test_id}"),
         "compset": compset,
         "machine": args.machine,
         "project": args.project,

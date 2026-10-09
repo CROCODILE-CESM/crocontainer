@@ -57,7 +57,7 @@ SMS_D_Ld2.USER_RES.CR1850MARBL_JRA_GLOFAS.derecho_intel.crocodash.<testid>/
   croc_test.log           output of every command
   crocodash_config.yaml   the exact config passed to `crocodash create`
   <same name as the test dir>/   the case (unique name, so each test gets its own CIME build/run dir)
-  inputdir/
+inputdir/<compset>.<testid>/     the case's forcing (kept short: MOM6 truncates INPUTDIR at 128 characters)
 ```
 
 Check the results with CIME's own tool:
