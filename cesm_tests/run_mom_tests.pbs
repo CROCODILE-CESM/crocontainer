@@ -21,7 +21,7 @@
 # TESTROOT  : where test dirs go (default: /glade/derecho/scratch/$USER/croc_tests)
 # CROCODASH_SRC : optional CrocoDash checkout (with submodules) to test instead
 #                 of the one installed in CONDA_ENV, e.g. a clone of main
-# UPDATE    : if set, pull CESMROOT and CROCODASH_SRC to their branch tips first
+# UPDATE    : if set, reset this repo, CESMROOT and CROCODASH_SRC to their branch tips first
 # PUBLISH   : if set, push one README badge per test to the test-results branch
 # EXTRA     : extra args for run_mom_tests.py, e.g. "--only MARBL"
 set -euo pipefail
@@ -36,10 +36,14 @@ conda activate "$CONDA_ENV"
 export ESMFMKFILE=$CONDA_PREFIX/lib/esmf.mk
 
 if [ -n "${UPDATE:-}" ]; then
-  git -C "$CESMROOT" pull -q --ff-only
+  # These are CI-only clones: follow each branch tip, even across force-pushes.
+  sync() { git -C "$1" fetch -q && git -C "$1" reset -q --hard '@{u}'; }
+  # This repo too (PBS already holds its own copy of this script).
+  sync "$PBS_O_WORKDIR"
+  sync "$CESMROOT"
   (cd "$CESMROOT" && ./bin/git-fleximod update)
   if [ -n "${CROCODASH_SRC:-}" ]; then
-    git -C "$CROCODASH_SRC" pull -q --ff-only
+    sync "$CROCODASH_SRC"
     git -C "$CROCODASH_SRC" submodule update -q --init --recursive
   fi
 fi
@@ -56,6 +60,5 @@ python run_mom_tests.py --cesmroot "$CESMROOT" --test-root "$TESTROOT" --paralle
   --badge-dir "$BADGES" ${EXTRA:-}
 
 if [ -n "${PUBLISH:-}" ]; then
-  module load gh
   bash publish_badges.sh "$BADGES"
 fi
