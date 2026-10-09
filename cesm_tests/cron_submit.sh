@@ -12,6 +12,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 CI_ROOT=${CI_ROOT:-/glade/work/$USER/croc_ci}
 
 cd "$HERE"
-/opt/pbs/bin/qsub -q main@desched1 -m ae -M "${MAILTO:-$USER@ucar.edu}" \
+# Job logs go next to the clones, not into this repo.
+mkdir -p "$CI_ROOT/logs"
+/opt/pbs/bin/qsub -q main@desched1 -m ae -M "${MAILTO:-$USER@ucar.edu}" -o "$CI_ROOT/logs/" \
   -v UPDATE=1,PUBLISH=1,CESMROOT=$CI_ROOT/CESM,CROCODASH_SRC=$CI_ROOT/CrocoDash \
   run_mom_tests.pbs

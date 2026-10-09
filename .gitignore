@@ -1,1 +1,4 @@
 *_case_bundle/
+# PBS job logs and Python bytecode from cesm_tests runs
+*.o[0-9]*
+__pycache__/
