@@ -5,6 +5,9 @@ source /opt/conda/etc/profile.d/conda.sh
 conda activate CrocoDash
 
 export USER=root
+# ubuntu-latest puts inputdata and scratch under $ENV{HOME}/cesm; Apptainer sets
+# HOME to the host user's home, which would bypass the /root/cesm mounts.
+export HOME=/root
 export DIN_LOC_ROOT=/root/cesm/inputdata
 unset NCAR_HOST
 
@@ -99,4 +102,11 @@ EOF
 fi
 
 ./case.build
-./case.submit --no-batch
+
+# Inside a PBS job (e.g. apptainer on Derecho) the host's PBS variables leak in,
+# and the container's OpenMPI then tries to read a PBS nodefile it cannot see.
+unset PBS_ENVIRONMENT PBS_JOBID PBS_NODEFILE
+./case.submit
+
+# case.submit reports success even when the run fails; CaseStatus does not.
+tail -n 20 CaseStatus | grep -q "case.run success" || { echo "case.run failed, see CaseStatus" >&2; exit 1; }
