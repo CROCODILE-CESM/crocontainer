@@ -8,12 +8,15 @@ dependencies:
   - python>=3.11.10,<3.12
   - esmpy>=8.6.1,<8.7.0
   - cdsapi>=0.7.6,<0.8.0
+  - python-eccodes>=2.30.0
   - numcodecs>=0.10.0,<0.16
   - h5netcdf>=1.7.3,<1.8.0
+  - ruamel.yaml>=0.18.0,<0.20.0
   - pip>=24.2,<24.3
   - pip:
     - -e ./CrocoDash/CrocoDash/visualCaseGen/external/mom6_forge/
     - -e ./CrocoDash/CrocoDash/rm6/
     - -e ./CrocoDash/CrocoDash/visualCaseGen/external/ipyfilechooser/
     - -e ./CrocoDash/CrocoDash/visualCaseGen/
+    - -e ./CrocoDash/gallery/
     - -e ./CrocoDash/
