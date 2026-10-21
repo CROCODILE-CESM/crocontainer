@@ -41,7 +41,15 @@ conda deactivate
 
 cd /workspace/case
 
-./xmlchange NTASKS=1
+# MPI tasks for every component (default 1). ubuntu-latest has no batch system,
+# so case.submit runs `mpiexec -n NTASKS` here, and any count up to the cores the
+# container can see works. Its MAX_MPITASKS_PER_NODE of 4 is raised to match so
+# CIME keeps the whole layout on this one node.
+# NTASKS > 1 needs a CESM whose FMS allocates the scatter buffer on non-root
+# PEs: with gfortran, MOM6's grid read otherwise segfaults in mpp_scatter.
+NTASKS=${NTASKS:-1}
+./xmlchange NTASKS=$NTASKS
+./xmlchange MAX_TASKS_PER_NODE=$NTASKS,MAX_MPITASKS_PER_NODE=$NTASKS
 ./case.setup --reset
 ./xmlchange DOUT_S=False
 ./xmlchange DIN_LOC_ROOT=/root/cesm/inputdata
