@@ -24,7 +24,15 @@ unset NCAR_HOST
 #      environments have no live data-access credentials.
 if [[ -f /workspace/case_config.yaml ]]; then
     crocodash create --config /workspace/case_config.yaml --override
-elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
+elif [[ -f /workspace/bundle/bundle.json || -f /workspace/bundle/crocodash_case.yaml ]]; then
+    # bundle.json marks the bundle CrocoDash writes now, crocodash_case.yaml
+    # the one it wrote before; the fork command is the same for both. A fork
+    # that can prompt gets --no-input, so a run with a TTY (docker run -it)
+    # doesn't stop to ask.
+    no_input=()
+    if crocodash fork --help | grep -q -- --no-input; then
+        no_input=(--no-input)
+    fi
     crocodash fork \
         --bundle /workspace/bundle \
         --caseroot /workspace/case \
@@ -32,7 +40,8 @@ elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
         --cesmroot "${CESMROOT}" \
         --machine ubuntu-latest \
         --project PROJ123 \
-        --plan '{"xml_files": true, "user_nl": true, "source_mods": true, "xmlchanges": false}'
+        --plan '{"xml_files": true, "user_nl": true, "source_mods": true, "xmlchanges": false}' \
+        "${no_input[@]}"
 else
     bash /workspace/panama_demo_setup.sh
 fi
