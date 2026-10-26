@@ -16,7 +16,6 @@ Usage (on a Derecho compute node, see run_mom_tests.pbs):
 """
 
 import argparse
-import copy
 import datetime
 import json
 import subprocess
@@ -81,9 +80,10 @@ def compset_longname(cesmroot, alias):
 
 
 def crocodash_config(cfg, args, compset, testdir):
-    """config.yaml + this test's compset/paths, forcings filtered to its components."""
+    """config.yaml + this test's compset/paths/grid files, forcings filtered to its components."""
     lname = compset_longname(args.cesmroot, compset)
-    out = {k: copy.deepcopy(cfg[k]) for k in ("grid", "topo", "vgrid")}
+    grids = testdir / "grids"
+    out = {}
     out["case"] = {
         **cfg.get("case", {}),
         "cesmroot": str(args.cesmroot),
@@ -94,6 +94,10 @@ def crocodash_config(cfg, args, compset, testdir):
         "compset": compset,
         "machine": args.machine,
         "project": args.project,
+        # Written by labsea_grids.py before the case is created (run_test).
+        "ocn_grid": str(grids / "ocean_hgrid.nc"),
+        "ocn_topo": str(grids / "ocean_topog.nc"),
+        "ocn_vgrid": str(grids / "ocean_vgrid.nc"),
     }
     forcings = {}
     for key, kwargs in cfg["forcings"].items():
@@ -183,7 +187,8 @@ def run_test(test, cfg, args):
         config_file = testdir / "crocodash_config.yaml"
         config_file.write_text(yaml.safe_dump(crocodash_config(cfg, args, compset, testdir)))
         if not phase(ts, CREATE_NEWCASE_PHASE,
-                     run(["crocodash", "create", "--config", config_file, "--override"], log)):
+                     run([sys.executable, HERE / "labsea_grids.py", testdir / "grids"], log)
+                     and run(["crocodash", "create", "--config", config_file, "--override"], log)):
             return
         try:
             changes = xmlchanges(caseopts, options, args.ntasks, args.data_ntasks)

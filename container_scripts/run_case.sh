@@ -15,14 +15,20 @@ unset NCAR_HOST
 #   1. Mount a CrocoDash YAML case config as /workspace/case_config.yaml to
 #      build any case directly via the CLI (general-purpose mode). Its
 #      case.caseroot/inputdir must be /workspace/case and /workspace/inputdir
-#      to match the paths this script uses below.
-#        docker run -v /path/to/your_config.yaml:/workspace/case_config.yaml ...
+#      to match the paths this script uses below. Mount the grid files it
+#      names too, or a script at /workspace/grids.py that writes them into
+#      /workspace/grids (see panama_grids.py).
+#        docker run -v /path/to/your_config.yaml:/workspace/case_config.yaml \
+#          -v /path/to/your_grids.py:/workspace/grids.py ...
 #   2. Mount a `crocodash bundle` output directory as /workspace/bundle to
 #      reconstruct a case shared from another machine/user.
 #   3. Neither mounted: fall back to the built-in Panama demo case (baked
 #      into the image), which stages pre-fetched test data since CI/demo
 #      environments have no live data-access credentials.
 if [[ -f /workspace/case_config.yaml ]]; then
+    if [[ -f /workspace/grids.py ]]; then
+        python /workspace/grids.py /workspace/grids
+    fi
     crocodash create --config /workspace/case_config.yaml --override
 elif [[ -n "$(ls -A /workspace/bundle 2>/dev/null)" ]]; then
     # The image makes /workspace/bundle empty, so anything in it is a bundle.

@@ -128,6 +128,7 @@ RUN /opt/conda/bin/pip install "cmake<4" --quiet
 COPY container_scripts/run_case.sh /workspace/run_case.sh
 COPY container_scripts/panama_demo_setup.sh /workspace/panama_demo_setup.sh
 COPY container_scripts/panama_case_config.yaml /workspace/panama_case_config.yaml
+COPY container_scripts/panama_grids.py /workspace/panama_grids.py
 RUN chmod +x /workspace/run_case.sh /workspace/panama_demo_setup.sh
 
 # cmake macros for the ubuntu-latest CIME machine — injected into each case
