@@ -24,15 +24,27 @@ unset NCAR_HOST
 #      environments have no live data-access credentials.
 if [[ -f /workspace/case_config.yaml ]]; then
     crocodash create --config /workspace/case_config.yaml --override
-elif [[ -f /workspace/bundle/crocodash_case.yaml ]]; then
-    crocodash fork \
-        --bundle /workspace/bundle \
+elif [[ -n "$(ls -A /workspace/bundle 2>/dev/null)" ]]; then
+    # The image makes /workspace/bundle empty, so anything in it is a bundle.
+    if [[ ! -f /workspace/bundle/bundle.json ]]; then
+        echo "/workspace/bundle has no bundle.json: it is a bundle from a CrocoDash" \
+            "older than 'crocodash create --from'. Bundle the case again." >&2
+        exit 1
+    fi
+    # The new case gets the bundled case's settings and its user's own
+    # changes (those specific to the bundle's machine are left out), and a
+    # copy of its forcing files. The container can't download data, so the
+    # forcings aren't processed here (--configure-only); --no-input keeps a
+    # run with a TTY (docker run -it) from stopping to ask.
+    crocodash create \
+        --from /workspace/bundle \
         --caseroot /workspace/case \
         --inputdir /workspace/inputdir \
         --cesmroot "${CESMROOT}" \
         --machine ubuntu-latest \
         --project PROJ123 \
-        --plan '{"xml_files": true, "user_nl": true, "source_mods": true, "xmlchanges": false}'
+        --configure-only \
+        --no-input
 else
     bash /workspace/panama_demo_setup.sh
 fi

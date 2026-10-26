@@ -41,7 +41,6 @@ jobs:
               test -f /workspace/CESM/cime/scripts/create_newcase && echo 'CESM OK' && \
               test -f /workspace/run_case.sh && echo 'run_case.sh OK' && \
               test -f /workspace/panama_demo_setup.sh && echo 'panama_demo_setup.sh OK' && \
-              crocodash fork --help > /dev/null && echo 'crocodash fork OK' && \
               crocodash create --help 2>&1 | grep -q -- '--configure-only' && echo 'crocodash create --configure-only OK'
             "
 
