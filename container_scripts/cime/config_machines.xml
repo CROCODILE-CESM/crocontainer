@@ -1,0 +1,86 @@
+  <!--
+  crocontainer's CIME machine. The Dockerfile puts it in CIME's per-user config
+  (/root/.cime/ubuntu-latest), where it replaces CESM's ubuntu-latest (a
+  GitHub-runner machine) for any CESM, so that a case made in the container
+  with `crocodash create` builds and runs as it is:
+    - inputdata, scratch and the archive are at the container's /root/cesm
+      mounts, not under $HOME (Apptainer sets HOME to the host's home);
+    - a new case runs on one MPI task (the default PE layout is one "node");
+      raise NTASKS for more, in the intel image only;
+    - each compiler's library paths, and the compiler behind its MPI wrappers,
+      are set here, where a host's environment can't override them as it does
+      Docker ENV under Apptainer;
+    - mpiexec runs with a host PBS job's variables removed, which would send
+      the MPI launcher to a nodefile the container can't see.
+  The intel compiler and impi are used by the intel image (Dockerfile.intel),
+  which lists intel first in COMPILERS.
+  -->
+  <machine MACH="ubuntu-latest">
+    <DESC>crocontainer: CESM in a container, one node, no batch system</DESC>
+    <OS>LINUX</OS>
+    <PROXY/>
+    <COMPILERS>gnu</COMPILERS>
+    <MPILIBS compiler="intel">impi</MPILIBS>
+    <MPILIBS>openmpi</MPILIBS>
+    <PROJECT>none</PROJECT>
+    <SAVE_TIMING_DIR> </SAVE_TIMING_DIR>
+    <CIME_OUTPUT_ROOT>/root/cesm/scratch</CIME_OUTPUT_ROOT>
+    <DIN_LOC_ROOT>/root/cesm/inputdata</DIN_LOC_ROOT>
+    <DIN_LOC_ROOT_CLMFORC>/root/cesm/inputdata/lmwg</DIN_LOC_ROOT_CLMFORC>
+    <DOUT_S_ROOT>/root/cesm/scratch/archive/$CASE</DOUT_S_ROOT>
+    <BASELINE_ROOT>/root/cesm/scratch/baselines</BASELINE_ROOT>
+    <CCSM_CPRNC/>
+    <GMAKE>make</GMAKE>
+    <GMAKE_J>8</GMAKE_J>
+    <BATCH_SYSTEM>none</BATCH_SYSTEM>
+    <SUPPORTED_BY>CROCODILE-CESM</SUPPORTED_BY>
+    <MAX_TASKS_PER_NODE>1</MAX_TASKS_PER_NODE>
+    <MAX_MPITASKS_PER_NODE>1</MAX_MPITASKS_PER_NODE>
+    <PROJECT_REQUIRED>FALSE</PROJECT_REQUIRED>
+    <mpirun mpilib="openmpi">
+      <executable>env -u PBS_ENVIRONMENT -u PBS_JOBID -u PBS_NODEFILE mpiexec</executable>
+      <arguments>
+        <arg name="ntasks"> -n {{ total_tasks }} </arg>
+      </arguments>
+    </mpirun>
+    <mpirun mpilib="impi">
+      <executable>env -u PBS_ENVIRONMENT -u PBS_JOBID -u PBS_NODEFILE mpiexec</executable>
+      <arguments>
+        <arg name="ntasks"> -n {{ total_tasks }} </arg>
+      </arguments>
+    </mpirun>
+    <module_system type="none" />
+    <environment_variables compiler="gnu">
+      <env name="CC">/usr/bin/mpicc</env>
+      <env name="CXX">/usr/bin/mpicxx</env>
+      <env name="FC">/usr/bin/mpifort</env>
+      <env name="ESMFMKFILE">/usr/local/esmf/install/lib/libO/Linux.gfortran.64.openmpi.default/esmf.mk</env>
+      <env name="NETCDF_PATH">/usr</env>
+      <env name="PNETCDF_PATH">/usr</env>
+      <env name="LDFLAGS">-L/usr/lib -lnetcdf -lnetcdff -lpnetcdf -lblas -llapack</env>
+      <env name="OMPI_CC">gcc</env>
+      <env name="OMPI_CXX">g++</env>
+      <env name="OMPI_FC">gfortran</env>
+    </environment_variables>
+    <environment_variables compiler="intel">
+      <env name="CC">/opt/intel/oneapi/mpi/latest/bin/mpiicx</env>
+      <env name="CXX">/opt/intel/oneapi/mpi/latest/bin/mpiicpx</env>
+      <env name="FC">/opt/intel/oneapi/mpi/latest/bin/mpiifx</env>
+      <env name="ESMFMKFILE">/usr/local/esmf-intel/lib/libO/Linux.intel.64.intelmpi.default/esmf.mk</env>
+      <env name="NETCDF_PATH">/opt/intel-libs</env>
+      <env name="PNETCDF_PATH">/opt/intel-libs</env>
+      <env name="LDFLAGS">-L/opt/intel-libs/lib -lnetcdf -lnetcdff -lpnetcdf -lblas -llapack</env>
+      <!-- Intel's runtime libraries, for intel cases only: some share their
+           names with Ubuntu's, which gnu builds need. -->
+      <env name="LD_LIBRARY_PATH">/opt/intel-libs/lib:/opt/intel/oneapi/compiler/latest/lib:/opt/intel/oneapi/mpi/latest/lib:/opt/intel/oneapi/mpi/latest/opt/mpi/libfabric/lib</env>
+      <!-- Derecho's intel module sets I_MPI_F90=ifort, gone from oneAPI 2025. -->
+      <env name="I_MPI_CC">icx</env>
+      <env name="I_MPI_CXX">icpx</env>
+      <env name="I_MPI_FC">ifx</env>
+      <env name="I_MPI_F90">ifx</env>
+      <env name="I_MPI_F77">ifx</env>
+      <!-- One node and no ssh: ranks share memory, and mpiexec forks its proxy. -->
+      <env name="I_MPI_FABRICS">shm</env>
+      <env name="I_MPI_HYDRA_BOOTSTRAP">fork</env>
+    </environment_variables>
+  </machine>

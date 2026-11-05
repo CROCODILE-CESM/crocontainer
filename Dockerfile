@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # MPI Implementation
     libopenmpi-dev openmpi-bin \
     # NetCDF and HDF5 (C and Fortran interfaces)
-    libnetcdf-dev libnetcdff-dev libpnetcdf-dev \
+    libnetcdf-dev libnetcdff-dev libpnetcdf-dev netcdf-bin \
     libhdf5-dev \
     # Linear Algebra
     libblas-dev liblapack-dev \
@@ -85,7 +85,8 @@ COPY CrocoDash/ /workspace/CrocoDash/
 RUN printf "Metadata-Version: 2.1\nName: rm6\nVersion: 0.1.0\n" > /workspace/CrocoDash/CrocoDash/rm6/PKG-INFO
 RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
-    conda env create -f /workspace/CrocoDash/environment.yml -y
+    conda env create -f /workspace/CrocoDash/environment.yml -y && \
+    conda clean -afy
 
 
 # --- GIT CONFIG ---
@@ -94,18 +95,12 @@ RUN git config --global user.email "crotainer@crocodile-cesm.org" && \
     git config --global init.defaultBranch main
 
 # --- ENV VARS ---
-ENV NETCDF_PATH=/usr \
-    PNETCDF_PATH=/usr \
-    CC=mpicc \
-    FC=mpifort \
-    CXX=mpicxx \
-    CIME_MODEL=cesm \
+# Build settings (compilers, netcdf, ESMF) are in the CIME machine instead,
+# per compiler and out of reach of a host's environment.
+ENV CIME_MODEL=cesm \
     CIME_DRIVER=nuopc \
     CIME_MACHINE=ubuntu-latest \
-    CIME_OUTPUT_ROOT=/root/cesm/scratch \
     USER=root \
-    # Use /usr/lib directly because your symlinks in Step 1 handle the arch logic!
-    LDFLAGS="-L/usr/lib -lnetcdf -lnetcdff -lpnetcdf -lblas -llapack" \
     PATH=$CONDA_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH \
     OMPI_ALLOW_RUN_AS_ROOT=1 \
     OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
@@ -114,26 +109,27 @@ ENV NETCDF_PATH=/usr \
     # Force OpenMPI to use basic TCP communication to avoid "No such device" errors
     OMPI_MCA_btl=self,tcp
 
-RUN ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1) && \
-    echo "export ESMFMKFILE=${ESMFMKFILE}" >> /etc/environment && \
-    echo "export ESMFMKFILE=${ESMFMKFILE}" >> ~/.bashrc 
-
 # Pin cmake < 4.0 in the conda base env so it takes precedence over the system
 # cmake (ubuntu:latest ships cmake >= 4.0 which breaks the CDEPS cmake build —
 # FindMPI fails when project() has not yet been called, which is the case in
 # CDEPS when building as part of CESM).
 RUN /opt/conda/bin/pip install "cmake<4" --quiet
 
+# The container's CIME machine (container_scripts/cime/config_machines.xml) and
+# its cmake macros, in CIME's per-user config: ~/.cime/ubuntu-latest replaces
+# CESM's own ubuntu-latest for any CESM, this image's or one you mount.
+COPY container_scripts/cime/config_machines.xml /root/.cime/ubuntu-latest/config_machines.xml
+COPY container_scripts/cime/*.cmake /root/.cime/
+RUN test -f /usr/local/esmf/install/lib/libO/Linux.gfortran.64.openmpi.default/esmf.mk
+# Under Apptainer, which brings the host's HOME and NCAR_HOST in.
+COPY container_scripts/apptainer_env.sh /.singularity.d/env/91-crocontainer.sh
+
 #  Copy Scripts
+COPY container_scripts/crocodash /usr/local/bin/crocodash
 COPY container_scripts/run_case.sh /workspace/run_case.sh
 COPY container_scripts/panama_demo_setup.sh /workspace/panama_demo_setup.sh
 COPY container_scripts/panama_case_config.yaml /workspace/panama_case_config.yaml
 RUN chmod +x /workspace/run_case.sh /workspace/panama_demo_setup.sh
-
-# cmake macros for the ubuntu-latest CIME machine — injected into each case
-# by run_case.sh after case.setup to ensure container MPI is used.
-RUN mkdir -p /workspace/cmake_macros
-COPY container_scripts/cmake_macros/gnu_ubuntu-latest.cmake /workspace/cmake_macros/gnu_ubuntu-latest.cmake
 
 # Create Mount Points
 RUN mkdir -p /glade
