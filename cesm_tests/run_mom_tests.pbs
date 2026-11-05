@@ -42,7 +42,11 @@ if [ -n "${UPDATE:-}" ]; then
   # This repo too (PBS already holds its own copy of this script).
   sync "$PBS_O_WORKDIR"
   sync "$CESMROOT"
-  (cd "$CESMROOT" && ./bin/git-fleximod update)
+  # When upstream moves a submodule inside a sparse checkout (CAM's cam-sima),
+  # git's on-demand submodule fetch fails with "Could not access submodule".
+  # fleximod updates submodules itself, so turn that recursion off.
+  (cd "$CESMROOT" && GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=fetch.recurseSubmodules GIT_CONFIG_VALUE_0=false \
+    ./bin/git-fleximod update)
   if [ -n "${CROCODASH_SRC:-}" ]; then
     sync "$CROCODASH_SRC"
     git -C "$CROCODASH_SRC" submodule update -q --init --recursive
