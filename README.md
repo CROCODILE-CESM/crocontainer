@@ -6,10 +6,10 @@ Containers that build and run CESM regional MOM6 cases made with [CrocoDash](htt
 
 | Image (`ghcr.io/crocodile-cesm/crocontainer:…`) | What's inside | Runs on | MPI tasks | Download |
 |---|---|---|---|---|
-| `slim` | compilers, MPI, netCDF, ESMF; **you bring CESM and a CrocoDash env** | x86-64, ARM | 1 | SIZE_SLIM |
-| `slim-intel` | the same with Intel's compilers and MPI | x86-64 | as many as you have cores | SIZE_SLIM_INTEL |
-| `latest` | `slim` + CESM (`crocodash` branch) + CrocoDash `main` and its env | x86-64, ARM | 1 | SIZE_LATEST |
-| `latest-intel` | `slim-intel` + the same | x86-64 | as many as you have cores | SIZE_LATEST_INTEL |
+| `slim` | compilers, MPI, netCDF, ESMF; **you bring CESM and a CrocoDash env** | x86-64, ARM | 1 | 0.5 GB |
+| `slim-intel` | the same with Intel's compilers and MPI | x86-64 | as many as you have cores | 2.1 GB |
+| `latest` | `slim` + CESM (`crocodash` branch) + CrocoDash `main` and its env | x86-64, ARM | 1 | 5.0 GB |
+| `latest-intel` | `slim-intel` + the same | x86-64 | as many as you have cores | 6.7 GB |
 
 `slim` is for when you keep your own CESM and CrocoDash up to date; `latest` has everything, rebuilt weekly, but trails the newest work. The `intel` images build CESM with Intel's compilers, as on Derecho; built with gfortran, MOM6 crashes on more than one task.
 
