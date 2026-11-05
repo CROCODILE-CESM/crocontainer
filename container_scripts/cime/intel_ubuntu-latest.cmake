@@ -1,5 +1,5 @@
 # Explicit compilers and MPI for the ubuntu-latest machine in the intel image
-# (Dockerfile.intel). As in gnu_ubuntu-latest.cmake, absolute paths keep MPI or
+# (slim-intel and intel). As in gnu_ubuntu-latest.cmake, absolute paths keep MPI or
 # compilers from a bind-mounted host (e.g. /glade) out of the build.
 #
 # ccs_config's intel.cmake still names ifort, which oneAPI 2025 no longer ships;
