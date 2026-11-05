@@ -45,11 +45,20 @@ jobs:
             "
 
   nyf-run-test:
-    name: NYF end-to-end
+    name: NYF end-to-end (${{ matrix.tag }}, ${{ matrix.ntasks }} tasks)
     runs-on: ubuntu-latest
     needs: smoke-test
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: latest-amd64
+            ntasks: 1
+          # The intel image's MOM6 runs on more than one task; use the runner's 4 cores.
+          - tag: latest-intel
+            ntasks: 4
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,7 +90,7 @@ jobs:
         run: bash scripts/download_nyf_inputdata.sh ./cesm_nyf_inputdata 8
 
       - name: Pull container image
-        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64
+        run: podman pull --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:${{ matrix.tag }}
 
       - name: Create scratch directory
         run: mkdir -p cesm_scratch
@@ -93,19 +102,19 @@ jobs:
           # own copies of the demo script/config/run_case.sh so CI tests the
           # current PR's versions rather than whatever was baked into the
           # already-published image.
-          podman run --rm --platform linux/amd64 \
+          podman run --rm --platform linux/amd64 -e NTASKS=${{ matrix.ntasks }} \
             -v "${{ github.workspace }}/cesm_nyf_inputdata:/root/cesm/inputdata" \
             -v "${{ github.workspace }}/cesm_scratch:/root/cesm/scratch" \
             -v "${{ github.workspace }}/container_scripts/panama_demo_setup.sh:/workspace/panama_demo_setup.sh" \
             -v "${{ github.workspace }}/container_scripts/panama_case_config.yaml:/workspace/panama_case_config.yaml" \
             -v "${{ github.workspace }}/container_scripts/run_case.sh:/workspace/run_case.sh" \
-            ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
+            ghcr.io/crocodile-cesm/crocontainer:${{ matrix.tag }} \
             /bin/bash /workspace/run_case.sh
 
       - name: Upload CESM logs and output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cesm-nyf-${{ github.run_id }}
+          name: cesm-nyf-${{ matrix.tag }}-${{ github.run_id }}
           path: ${{ github.workspace }}/cesm_scratch/case/run
           if-no-files-found: warn

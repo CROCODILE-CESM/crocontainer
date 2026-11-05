@@ -1,0 +1,6 @@
+#!/bin/bash
+# `crocodash` from any shell in the container: runs the CLI in its conda env,
+# which then stays out of the way of case.build.
+source /opt/conda/etc/profile.d/conda.sh
+conda activate CrocoDash
+exec crocodash "$@"

@@ -1,131 +1,41 @@
 #!/bin/bash
+# Makes a case at /workspace/case, then builds and runs it. The case comes from
+# the first of:
+#   1. a CrocoDash YAML config at /workspace/case_config.yaml (its case.caseroot
+#      and case.inputdir must be /workspace/case and /workspace/inputdir);
+#   2. a `crocodash bundle` directory at /workspace/bundle;
+#   3. the built-in Panama demo.
+# NTASKS sets the MPI tasks of every component (default 1; more needs the intel
+# image). Output stays in /root/cesm/scratch/case/run.
+#
+# This is only a shortcut: in the container, `crocodash create` then
+# ./case.build and ./case.submit in the case directory do the same.
 set -euo pipefail
 
-source /opt/conda/etc/profile.d/conda.sh
-conda activate CrocoDash
-
-export USER=root
-# ubuntu-latest puts inputdata and scratch under $ENV{HOME}/cesm; Apptainer sets
-# HOME to the host user's home, which would bypass the /root/cesm mounts.
-export HOME=/root
-export DIN_LOC_ROOT=/root/cesm/inputdata
-unset NCAR_HOST
-
-# Case setup -- three modes, checked in order:
-#   1. Mount a CrocoDash YAML case config as /workspace/case_config.yaml to
-#      build any case directly via the CLI (general-purpose mode). Its
-#      case.caseroot/inputdir must be /workspace/case and /workspace/inputdir
-#      to match the paths this script uses below.
-#        docker run -v /path/to/your_config.yaml:/workspace/case_config.yaml ...
-#   2. Mount a `crocodash bundle` output directory as /workspace/bundle to
-#      reconstruct a case shared from another machine/user.
-#   3. Neither mounted: fall back to the built-in Panama demo case (baked
-#      into the image), which stages pre-fetched test data since CI/demo
-#      environments have no live data-access credentials.
 if [[ -f /workspace/case_config.yaml ]]; then
     crocodash create --config /workspace/case_config.yaml --override
 elif [[ -n "$(ls -A /workspace/bundle 2>/dev/null)" ]]; then
-    # The image makes /workspace/bundle empty, so anything in it is a bundle.
     if [[ ! -f /workspace/bundle/bundle.json ]]; then
         echo "/workspace/bundle has no bundle.json: it is a bundle from a CrocoDash" \
             "older than 'crocodash create --from'. Bundle the case again." >&2
         exit 1
     fi
-    # The new case gets the bundled case's settings and its user's own
-    # changes (those specific to the bundle's machine are left out), and a
-    # copy of its forcing files. The container can't download data, so the
-    # forcings aren't processed here (--configure-only); --no-input keeps a
-    # run with a TTY (docker run -it) from stopping to ask.
-    crocodash create \
-        --from /workspace/bundle \
-        --caseroot /workspace/case \
-        --inputdir /workspace/inputdir \
-        --cesmroot "${CESMROOT}" \
-        --machine ubuntu-latest \
-        --project PROJ123 \
-        --configure-only \
-        --no-input
+    # The container can't download forcing data: the bundle carries the
+    # processed forcings, so they are not processed again (--configure-only).
+    crocodash create --from /workspace/bundle --caseroot /workspace/case \
+        --inputdir /workspace/inputdir --cesmroot "${CESMROOT}" \
+        --machine ubuntu-latest --project PROJ123 --configure-only --no-input
 else
     bash /workspace/panama_demo_setup.sh
 fi
 
-conda deactivate
-
 cd /workspace/case
-
-# MPI tasks for every component (default 1). ubuntu-latest has no batch system,
-# so case.submit runs `mpiexec -n NTASKS` here, and any count up to the cores the
-# container can see works. Its MAX_MPITASKS_PER_NODE of 4 is raised to match so
-# CIME keeps the whole layout on this one node.
-# NTASKS > 1 needs a CESM whose FMS allocates the scatter buffer on non-root
-# PEs: with gfortran, MOM6's grid read otherwise segfaults in mpp_scatter.
-NTASKS=${NTASKS:-1}
-./xmlchange NTASKS=$NTASKS
-./xmlchange MAX_TASKS_PER_NODE=$NTASKS,MAX_MPITASKS_PER_NODE=$NTASKS
-./case.setup --reset
-./xmlchange DOUT_S=False
-./xmlchange DIN_LOC_ROOT=/root/cesm/inputdata
-
-# Inject compiler macros that hardcode the container's MPI paths.
-# Prevents HPC MPI libraries (e.g. from a bind-mounted /glade on Derecho)
-# from leaking into the cmake build via PATH.
-cp /workspace/cmake_macros/gnu_ubuntu-latest.cmake cmake_macros/
-
-export ESMFMKFILE=$(find ${ESMF_INSTALL_PREFIX}/lib -name "esmf.mk" | head -1)
-export OMPI_CC=gcc
-export OMPI_FC=gfortran
-export OMPI_CXX=g++
-unset NCAR_HOST
-
-# Limit JRA55 files to only the years needed by this run (skip for NYF)
-DATM_MODE=$(./xmlquery DATM_MODE --value 2>/dev/null || echo "")
-if [[ "$DATM_MODE" == *"JRA"* ]]; then
-    YR_START=$(./xmlquery DATM_YR_START --value)
-    YR_END=$(./xmlquery DATM_YR_END --value)
-    YR_PREV=$((YR_START - 1))
-    BASE="/root/cesm/inputdata/ocn/jra55/v1.3_noleap/JRA.v1.3"
-
-    cat >> user_nl_datm_streams << EOF
-CORE_IAF_JRA.PREC:year_first = ${YR_PREV}
-CORE_IAF_JRA.PREC:year_last = ${YR_END}
-CORE_IAF_JRA.PREC:year_align = ${YR_PREV}
-CORE_IAF_JRA.PREC:datafiles = ${BASE}.prec.TL319.${YR_PREV}.171019.nc,${BASE}.prec.TL319.${YR_END}.171019.nc
-CORE_IAF_JRA.LWDN:year_first = ${YR_PREV}
-CORE_IAF_JRA.LWDN:year_last = ${YR_END}
-CORE_IAF_JRA.LWDN:year_align = ${YR_PREV}
-CORE_IAF_JRA.LWDN:datafiles = ${BASE}.lwdn.TL319.${YR_PREV}.171019.nc,${BASE}.lwdn.TL319.${YR_END}.171019.nc
-CORE_IAF_JRA.SWDN:year_first = ${YR_PREV}
-CORE_IAF_JRA.SWDN:year_last = ${YR_END}
-CORE_IAF_JRA.SWDN:year_align = ${YR_PREV}
-CORE_IAF_JRA.SWDN:datafiles = ${BASE}.swdn.TL319.${YR_PREV}.171019.nc,${BASE}.swdn.TL319.${YR_END}.171019.nc
-CORE_IAF_JRA.Q_10:year_first = ${YR_PREV}
-CORE_IAF_JRA.Q_10:year_last = ${YR_END}
-CORE_IAF_JRA.Q_10:year_align = ${YR_PREV}
-CORE_IAF_JRA.Q_10:datafiles = ${BASE}.q_10.TL319.${YR_PREV}.171019.nc,${BASE}.q_10.TL319.${YR_END}.171019.nc
-CORE_IAF_JRA.SLP_:year_first = ${YR_PREV}
-CORE_IAF_JRA.SLP_:year_last = ${YR_END}
-CORE_IAF_JRA.SLP_:year_align = ${YR_PREV}
-CORE_IAF_JRA.SLP_:datafiles = ${BASE}.slp.TL319.${YR_PREV}.171019.nc,${BASE}.slp.TL319.${YR_END}.171019.nc
-CORE_IAF_JRA.T_10:year_first = ${YR_PREV}
-CORE_IAF_JRA.T_10:year_last = ${YR_END}
-CORE_IAF_JRA.T_10:year_align = ${YR_PREV}
-CORE_IAF_JRA.T_10:datafiles = ${BASE}.t_10.TL319.${YR_PREV}.171019.nc,${BASE}.t_10.TL319.${YR_END}.171019.nc
-CORE_IAF_JRA.U_10:year_first = ${YR_PREV}
-CORE_IAF_JRA.U_10:year_last = ${YR_END}
-CORE_IAF_JRA.U_10:year_align = ${YR_PREV}
-CORE_IAF_JRA.U_10:datafiles = ${BASE}.u_10.TL319.${YR_PREV}.171019.nc,${BASE}.u_10.TL319.${YR_END}.171019.nc
-CORE_IAF_JRA.V_10:year_first = ${YR_PREV}
-CORE_IAF_JRA.V_10:year_last = ${YR_END}
-CORE_IAF_JRA.V_10:year_align = ${YR_PREV}
-CORE_IAF_JRA.V_10:datafiles = ${BASE}.v_10.TL319.${YR_PREV}.171019.nc,${BASE}.v_10.TL319.${YR_END}.171019.nc
-EOF
+if [[ -n "${NTASKS:-}" ]]; then
+    ./xmlchange NTASKS="${NTASKS}"
+    ./case.setup --reset
 fi
-
+./xmlchange DOUT_S=FALSE  # leave the output in the run directory
 ./case.build
-
-# Inside a PBS job (e.g. apptainer on Derecho) the host's PBS variables leak in,
-# and the container's OpenMPI then tries to read a PBS nodefile it cannot see.
-unset PBS_ENVIRONMENT PBS_JOBID PBS_NODEFILE
 ./case.submit
 
 # case.submit reports success even when the run fails; CaseStatus does not.

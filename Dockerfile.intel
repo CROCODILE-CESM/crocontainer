@@ -1,0 +1,14 @@
+# Intel variant of crocontainer: the amd64 image (Dockerfile) plus Intel's
+# oneAPI compilers and MPI, which CESM then builds with by default. Its MOM6 runs
+# on more than one MPI task; the gnu image's cannot. See
+# container_scripts/install_intel_toolchain.sh for why. amd64 only.
+ARG BASE_IMAGE=ghcr.io/crocodile-cesm/crocontainer:latest-amd64
+FROM ${BASE_IMAGE}
+
+COPY container_scripts/install_intel_toolchain.sh /tmp/install_intel_toolchain.sh
+RUN bash /tmp/install_intel_toolchain.sh && rm /tmp/install_intel_toolchain.sh
+
+# The compilers and mpiexec on PATH for interactive use. Case builds and runs
+# get their settings, LD_LIBRARY_PATH included, from the CIME machine.
+ENV PATH=/opt/intel/oneapi/mpi/latest/bin:/opt/intel/oneapi/compiler/latest/bin:${PATH} \
+    I_MPI_ROOT=/opt/intel/oneapi/mpi/latest
