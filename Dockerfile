@@ -29,6 +29,18 @@ RUN ln -s /usr/lib/$(uname -m)-linux-gnu/libnetcdf.so /usr/lib/libnetcdf.so && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libnetcdff.so /usr/lib/libnetcdff.so && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libpnetcdf.a /usr/lib/libpnetcdf.a
 
+# --- Python for CIME, and cmake < 4 ---
+# micromamba keeps /opt/conda to a small base env: Python with PyYAML (MOM6's
+# namelist generation needs it) and cmake < 4 (ESMF's build needs a cmake, and
+# cmake 4, Ubuntu's, breaks the CDEPS build: FindMPI fails before project()).
+# It also builds conda envs: CrocoDash's in the full image, or your own in slim.
+ENV MAMBA_ROOT_PREFIX=/opt/conda \
+    PATH=/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+RUN case $(uname -m) in x86_64) platform=linux-64;; aarch64) platform=linux-aarch64;; esac && \
+    curl -fsSL https://micro.mamba.pm/api/micromamba/${platform}/latest | tar -xj -C /usr/local bin/micromamba && \
+    micromamba install -y -n base -c conda-forge python=3.12 pyyaml "cmake<4" && \
+    micromamba clean -afy
+
 # --- ESMF, built from source (the source tree is not kept) ---
 ENV ESMF_INSTALL_PREFIX=/usr/local/esmf/install
 RUN git clone --depth 1 --branch v8.9.1 https://github.com/esmf-org/esmf /tmp/esmf && \
@@ -40,17 +52,6 @@ RUN git clone --depth 1 --branch v8.9.1 https://github.com/esmf-org/esmf /tmp/es
     make install && \
     cd / && rm -rf /tmp/esmf && \
     test -f ${ESMF_INSTALL_PREFIX}/lib/libO/Linux.gfortran.64.openmpi.default/esmf.mk
-
-# --- Python for CIME, and cmake < 4 ---
-# micromamba keeps /opt/conda to a small base env: Python with PyYAML (MOM6's
-# namelist generation needs it) and cmake < 4 (cmake 4, Ubuntu's, breaks the
-# CDEPS build: FindMPI fails before project()). It also builds conda envs:
-# CrocoDash's in the full image, or your own in slim.
-ENV MAMBA_ROOT_PREFIX=/opt/conda
-RUN case $(uname -m) in x86_64) platform=linux-64;; aarch64) platform=linux-aarch64;; esac && \
-    curl -fsSL https://micro.mamba.pm/api/micromamba/${platform}/latest | tar -xj -C /usr/local bin/micromamba && \
-    micromamba install -y -n base -c conda-forge python=3.12 pyyaml "cmake<4" && \
-    micromamba clean -afy
 
 # --- GIT CONFIG ---
 RUN git config --global user.email "crotainer@crocodile-cesm.org" && \
