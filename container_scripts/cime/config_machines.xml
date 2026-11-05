@@ -52,6 +52,13 @@
       </arguments>
     </mpirun>
     <module_system type="none" />
+    <!-- The timing file, as on CESM's own machines. Without it, a case.submit
+         with GitPython importable (a CrocoDash env active) fails after the run:
+         CIME's get_timing then runs `git add *.<lid>`, and nothing matches. -->
+    <environment_variables comp_interface="nuopc">
+      <env name="ESMF_RUNTIME_PROFILE">ON</env>
+      <env name="ESMF_RUNTIME_PROFILE_OUTPUT">SUMMARY</env>
+    </environment_variables>
     <environment_variables compiler="gnu">
       <env name="PATH">/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</env>
       <env name="CC">/usr/bin/mpicc</env>

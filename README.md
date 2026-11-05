@@ -35,7 +35,7 @@ cd <caseroot>
 
 In the `latest` images `crocodash` is ready to use. With `slim`, run it from your own CrocoDash env ([below](#slim-bring-your-own-cesm-and-crocodash)); it can stay active for `case.build`, which uses the container's compilers whatever is on your `PATH`.
 
-The run directory is `/root/cesm/scratch/<case>/run`, and with short-term archiving on, the output then moves to `/root/cesm/scratch/archive/<case>`. Mount a host directory at `/root/cesm/scratch` to keep them, and put `caseroot` and `inputdir` under it too (e.g. `/root/cesm/scratch/cases/mycase`). CESM's input data goes at `/root/cesm/inputdata`. Forcings need their source data: on Derecho, `crocodash create` reads it from GLADE as usual; elsewhere, see [Input data](#input-data), or make the case where the data is and bring it in as a [bundle](#bringing-in-a-case-from-another-machine).
+The run directory is `/root/cesm/scratch/<case>/run`, and with short-term archiving on, the output then moves to `/root/cesm/scratch/archive/<case>`. Mount a host directory at `/root/cesm/scratch` to keep them, and put `caseroot` and `inputdir` under it too (e.g. `/root/cesm/scratch/cases/mycase`; CrocoDash wants their parent directories to exist). CESM's input data goes at `/root/cesm/inputdata`. Forcings need their source data: on Derecho, `crocodash create` reads it from GLADE as usual; elsewhere, see [Input data](#input-data), or make the case where the data is and bring it in as a [bundle](#bringing-in-a-case-from-another-machine).
 
 ### On Derecho (Apptainer)
 
