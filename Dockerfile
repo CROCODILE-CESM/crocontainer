@@ -1,70 +1,101 @@
-# --- OS & TOOLCHAIN ---
-FROM ubuntu:latest
+# crocontainer's images, each a --target of this file (see build.yml):
+#   slim        what CESM needs to build and run a case: Ubuntu, gfortran,
+#               OpenMPI, netCDF, ESMF, the container's CIME machine, and a
+#               small Python for CIME. You bring CESM and a CrocoDash env.
+#   slim-intel  slim plus Intel's compilers and MPI: MOM6 runs on more than
+#               one task (it can't with gfortran; see install_intel_toolchain.sh).
+#   full        slim, or slim-intel with --build-arg FULL_BASE=slim-intel,
+#               plus CESM, CrocoDash and its conda env: nothing to bring.
+ARG FULL_BASE=slim
+
+# ============================== slim ==============================
+FROM ubuntu:latest AS slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Compilers
-    gfortran g++ gcc \
-    git cmake wget curl\
+    gfortran g++ gcc make \
     # MPI Implementation
     libopenmpi-dev openmpi-bin \
-    # NetCDF and HDF5 (C and Fortran interfaces)
-    libnetcdf-dev libnetcdff-dev libpnetcdf-dev netcdf-bin \
-    libhdf5-dev \
+    # NetCDF and HDF5 (C and Fortran interfaces), and ncdump for archiving
+    libnetcdf-dev libnetcdff-dev libpnetcdf-dev netcdf-bin libhdf5-dev \
     # Linear Algebra
     libblas-dev liblapack-dev \
-    # Required for CIME scripts
-    libxml2-utils make ca-certificates\
-    # Python dependencies (for CIME and CrocoDash)
-    python3-full python3-pip python3-numpy python3-scipy \
-    && rm -rf /var/lib/apt/lists/* 
+    # CIME (xmllint, git describe), downloads
+    libxml2-utils git wget curl bzip2 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Dynamic symlinking in Dockerfile for any architecture
 RUN ln -s /usr/lib/$(uname -m)-linux-gnu/libnetcdf.so /usr/lib/libnetcdf.so && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libnetcdff.so /usr/lib/libnetcdff.so && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libpnetcdf.a /usr/lib/libpnetcdf.a
 
-# --- ESMF ENVIRONMENT ---
-ENV ESMF_DIR=/usr/local/esmf \
-    ESMF_INSTALL_PREFIX=/usr/local/esmf/install \
-    ESMF_COMM=openmpi \
-    ESMF_COMPILER=gfortran \
-    ESMF_ABI=64 \
-    ESMF_NETCDF="split" \
-    ESMF_NETCDF_INCLUDE=/usr/include \
-    ESMF_BOPT=O
-
-# --- BUILD ESMF FROM SOURCE ---
-RUN mkdir -p ${ESMF_DIR} && \
-    cd /usr/local && \
-    # Clone specific tag v8.9.1
-    git clone --depth 1 --branch v8.9.1 https://github.com/esmf-org/esmf esmf && \
-    cd esmf && \
-    # Set NetCDF path dynamically based on architecture
-    export ESMF_NETCDF_LIBPATH=/usr/lib/$(uname -m)-linux-gnu && \
+# --- ESMF, built from source (the source tree is not kept) ---
+ENV ESMF_INSTALL_PREFIX=/usr/local/esmf/install
+RUN git clone --depth 1 --branch v8.9.1 https://github.com/esmf-org/esmf /tmp/esmf && \
+    cd /tmp/esmf && \
+    export ESMF_DIR=/tmp/esmf ESMF_COMM=openmpi ESMF_COMPILER=gfortran ESMF_ABI=64 \
+        ESMF_NETCDF=split ESMF_NETCDF_INCLUDE=/usr/include \
+        ESMF_NETCDF_LIBPATH=/usr/lib/$(uname -m)-linux-gnu ESMF_BOPT=O && \
     make -j$(nproc) && \
     make install && \
-    # Clean up to save space (distclean removes build objects that plain
-    # clean leaves behind; the already-installed ESMF_INSTALL_PREFIX tree is
-    # untouched since distclean targets the build tree, not the install tree)
-    make distclean
+    cd / && rm -rf /tmp/esmf && \
+    test -f ${ESMF_INSTALL_PREFIX}/lib/libO/Linux.gfortran.64.openmpi.default/esmf.mk
 
+# --- Python for CIME, and cmake < 4 ---
+# micromamba keeps /opt/conda to a small base env: Python with PyYAML (MOM6's
+# namelist generation needs it) and cmake < 4 (cmake 4, Ubuntu's, breaks the
+# CDEPS build: FindMPI fails before project()). It also builds conda envs:
+# CrocoDash's in the full image, or your own in slim.
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+RUN case $(uname -m) in x86_64) platform=linux-64;; aarch64) platform=linux-aarch64;; esac && \
+    curl -fsSL https://micro.mamba.pm/api/micromamba/${platform}/latest | tar -xj -C /usr/local bin/micromamba && \
+    micromamba install -y -n base -c conda-forge python=3.12 pyyaml "cmake<4" && \
+    micromamba clean -afy
 
-# --- CONDA ---
-ENV CONDA_DIR=/opt/conda
-ENV PATH=$CONDA_DIR/bin:$PATH
+# --- GIT CONFIG ---
+RUN git config --global user.email "crotainer@crocodile-cesm.org" && \
+    git config --global user.name "Crotainer" && \
+    git config --global init.defaultBranch main
 
-RUN apt-get update && apt-get install -y curl && \
-    arch=$(uname -m) && \
-    if [ "$arch" = "x86_64" ]; then CONDA_ARCH="x86_64"; \
-    elif [ "$arch" = "aarch64" ]; then CONDA_ARCH="aarch64"; \
-    fi && \
-    curl -fsSL "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-${CONDA_ARCH}.sh" -o /tmp/miniconda.sh && \
-    bash /tmp/miniconda.sh -b -p $CONDA_DIR && \
-    rm /tmp/miniconda.sh && \
-    # USE THE FULL PATH HERE:
-    $CONDA_DIR/bin/conda clean -afy && \
-    apt-get purge -y --auto-remove curl && \
-    rm -rf /var/lib/apt/lists/*
+# --- ENV VARS ---
+# Build settings (compilers, netcdf, ESMF) are in the CIME machine instead,
+# per compiler and out of reach of a host's environment.
+ENV CIME_MODEL=cesm \
+    CIME_DRIVER=nuopc \
+    CIME_MACHINE=ubuntu-latest \
+    USER=root \
+    PATH=/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    OMPI_ALLOW_RUN_AS_ROOT=1 \
+    OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+    # Vader mechanism often fails in virtualized environments like Podman/Docker on Mac
+    OMPI_MCA_btl_vader_single_copy_mechanism=none \
+    # Force OpenMPI to use basic TCP communication to avoid "No such device" errors
+    OMPI_MCA_btl=self,tcp
+
+# The container's CIME machine (container_scripts/cime/config_machines.xml) and
+# its cmake macros, in CIME's per-user config: ~/.cime/ubuntu-latest replaces
+# CESM's own ubuntu-latest for any CESM, the full image's or one you mount.
+COPY container_scripts/cime/config_machines.xml /root/.cime/ubuntu-latest/config_machines.xml
+COPY container_scripts/cime/*.cmake /root/.cime/
+# Under Apptainer, which brings the host's HOME and NCAR_HOST in.
+COPY container_scripts/apptainer_env.sh /.singularity.d/env/91-crocontainer.sh
+
+# Mount points
+RUN mkdir -p /glade /root/cesm/inputdata /root/cesm/scratch
+
+# =========================== slim-intel ===========================
+FROM slim AS slim-intel
+
+COPY container_scripts/install_intel_toolchain.sh /tmp/install_intel_toolchain.sh
+RUN bash /tmp/install_intel_toolchain.sh && rm /tmp/install_intel_toolchain.sh
+
+# The compilers and mpiexec on PATH for interactive use. Case builds and runs
+# get their settings, LD_LIBRARY_PATH included, from the CIME machine.
+ENV PATH=/opt/intel/oneapi/mpi/latest/bin:/opt/intel/oneapi/compiler/latest/bin:${PATH} \
+    I_MPI_ROOT=/opt/intel/oneapi/mpi/latest
+
+# ============================== full ==============================
+FROM ${FULL_BASE} AS full
 
 # --- CESM ---
 ARG CESM_BRANCH=crocodash
@@ -80,59 +111,17 @@ WORKDIR /workspace
 RUN echo "CESM ${CESM_BRANCH}@${CESM_SHA}" && git clone --depth 1 https://github.com/CROCODILE-CESM/CESM ${CESMROOT} -b ${CESM_BRANCH} && \
     cd ${CESMROOT} && ./bin/git-fleximod update
 
-# --- CROCODASH ENV ---
+# --- CROCODASH AND ITS ENV ---
 COPY CrocoDash/ /workspace/CrocoDash/
 RUN printf "Metadata-Version: 2.1\nName: rm6\nVersion: 0.1.0\n" > /workspace/CrocoDash/CrocoDash/rm6/PKG-INFO
-RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
-    conda env create -f /workspace/CrocoDash/environment.yml -y && \
-    conda clean -afy
-
-
-# --- GIT CONFIG ---
-RUN git config --global user.email "crotainer@crocodile-cesm.org" && \
-    git config --global user.name "Crotainer" && \
-    git config --global init.defaultBranch main
-
-# --- ENV VARS ---
-# Build settings (compilers, netcdf, ESMF) are in the CIME machine instead,
-# per compiler and out of reach of a host's environment.
-ENV CIME_MODEL=cesm \
-    CIME_DRIVER=nuopc \
-    CIME_MACHINE=ubuntu-latest \
-    USER=root \
-    PATH=$CONDA_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH \
-    OMPI_ALLOW_RUN_AS_ROOT=1 \
-    OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-    # Vader mechanism often fails in virtualized environments like Podman/Docker on Mac
-    OMPI_MCA_btl_vader_single_copy_mechanism=none \
-    # Force OpenMPI to use basic TCP communication to avoid "No such device" errors
-    OMPI_MCA_btl=self,tcp
-
-# Pin cmake < 4.0 in the conda base env so it takes precedence over the system
-# cmake (ubuntu:latest ships cmake >= 4.0 which breaks the CDEPS cmake build —
-# FindMPI fails when project() has not yet been called, which is the case in
-# CDEPS when building as part of CESM).
-RUN /opt/conda/bin/pip install "cmake<4" --quiet
-
-# The container's CIME machine (container_scripts/cime/config_machines.xml) and
-# its cmake macros, in CIME's per-user config: ~/.cime/ubuntu-latest replaces
-# CESM's own ubuntu-latest for any CESM, this image's or one you mount.
-COPY container_scripts/cime/config_machines.xml /root/.cime/ubuntu-latest/config_machines.xml
-COPY container_scripts/cime/*.cmake /root/.cime/
-RUN test -f /usr/local/esmf/install/lib/libO/Linux.gfortran.64.openmpi.default/esmf.mk
-# Under Apptainer, which brings the host's HOME and NCAR_HOST in.
-COPY container_scripts/apptainer_env.sh /.singularity.d/env/91-crocontainer.sh
+RUN cd /workspace/CrocoDash && \
+    micromamba create -y -n CrocoDash -f environment.yml && \
+    micromamba clean -afy
 
 #  Copy Scripts
 COPY container_scripts/crocodash /usr/local/bin/crocodash
 COPY container_scripts/run_case.sh /workspace/run_case.sh
 COPY container_scripts/panama_demo_setup.sh /workspace/panama_demo_setup.sh
 COPY container_scripts/panama_case_config.yaml /workspace/panama_case_config.yaml
-RUN chmod +x /workspace/run_case.sh /workspace/panama_demo_setup.sh
-
-# Create Mount Points
-RUN mkdir -p /glade
-RUN mkdir -p /workspace/bundle
-RUN mkdir -p /root/cesm/inputdata
-RUN mkdir -p /root/cesm/scratch
+RUN chmod +x /workspace/run_case.sh /workspace/panama_demo_setup.sh && \
+    mkdir -p /workspace/bundle

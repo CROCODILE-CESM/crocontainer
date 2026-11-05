@@ -11,19 +11,26 @@ env:
   IMAGE_NAME: crocodile-cesm/crocontainer
   CESM_BRANCH: crocodash
 
+# Each image is a --target of the Dockerfile:
+#   slim, full     on amd64 and arm64 (slim-<arch>, latest-<arch>; manifests slim, latest)
+#   slim-intel     on amd64 (slim-intel), and full on it (latest-intel)
+# Every run pushes per-commit sha-<commit>-<image> tags. Only runs on main move
+# the slim*/latest* tags, so a run dispatched on a branch builds images to test
+# without replacing the ones people pull.
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           - platform: linux/amd64
-            runner: ubuntu-latest
+            arch: amd64
           - platform: linux/arm64
-            runner: ubuntu-latest  # QEMU for now; swap to arm runner later if too slow
+            arch: arm64  # QEMU for now; swap to arm runner later if too slow
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,6 +48,32 @@ jobs:
           echo "crocodash=$(git -C CrocoDash rev-parse HEAD)" >> $GITHUB_OUTPUT
           echo "cesm=$(git ls-remote https://github.com/CROCODILE-CESM/CESM refs/heads/${{ env.CESM_BRANCH }} | cut -f1)" >> $GITHUB_OUTPUT
 
+      - name: Tags
+        id: tags
+        run: |
+          base=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          sha=${{ github.sha }}
+          arch=${{ matrix.arch }}
+          on_main=${{ github.ref == 'refs/heads/main' }}
+          tags() {  # $1: name, $2: per-commit suffix, $3: moving tag (main only)
+            echo "$1<<EOF"
+            echo "$base:sha-$sha-$2"
+            if [[ $on_main == true ]]; then echo "$base:$3"; fi
+            echo EOF
+          }
+          {
+            tags slim slim-$arch slim-$arch
+            tags full $arch latest-$arch
+            tags slim_intel slim-intel slim-intel
+            tags full_intel intel latest-intel
+          } >> $GITHUB_OUTPUT
+
+      # Four images (two on arm64) and the intel toolchain overflow the runner's free disk.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -54,83 +87,61 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-                type=semver,pattern={{version}}
-                type=sha,prefix=sha-
-                type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Derive arch suffix
-        id: arch
-        run: echo "suffix=$(echo ${{ matrix.platform }} | cut -d/ -f2)" >> $GITHUB_OUTPUT
-
-      - name: Build and push
+      # The later builds reuse slim's layers from this job's builder.
+      - name: slim
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          target: slim
           platforms: ${{ matrix.platform }}
           push: true
-          build-args: |
-                CESM_BRANCH=${{ env.CESM_BRANCH }}
-                CESM_SHA=${{ steps.tips.outputs.cesm }}
-                CROCODASH_SHA=${{ steps.tips.outputs.crocodash }}
-          tags: |
-                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.arch.outputs.suffix }}
-                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-${{ steps.arch.outputs.suffix }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.tags.outputs.slim }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
-  # The intel image (Dockerfile.intel): this run's amd64 image plus the oneAPI
-  # toolchain, so its MOM6 runs on more than one task. amd64 only. No layer
-  # cache: a new base image invalidates every layer above it anyway.
-  build-intel:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # The base image, oneAPI and the ESMF build overflow the runner's free disk.
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
+      - name: full
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile.intel
-          platforms: linux/amd64
+          target: full
+          platforms: ${{ matrix.platform }}
           push: true
           build-args: |
-                BASE_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-amd64
-          tags: |
-                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-intel
-                ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-intel
+                FULL_BASE=slim
+                CESM_BRANCH=${{ env.CESM_BRANCH }}
+                CESM_SHA=${{ steps.tips.outputs.cesm }}
+                CROCODASH_SHA=${{ steps.tips.outputs.crocodash }}
+          tags: ${{ steps.tags.outputs.full }}
 
-  # Merge into a single multi-arch manifest
+      - name: slim-intel
+        if: matrix.arch == 'amd64'  # oneAPI has no arm64 build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: slim-intel
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ steps.tags.outputs.slim_intel }}
+
+      - name: full on slim-intel
+        if: matrix.arch == 'amd64'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: full
+          platforms: ${{ matrix.platform }}
+          push: true
+          build-args: |
+                FULL_BASE=slim-intel
+                CESM_BRANCH=${{ env.CESM_BRANCH }}
+                CESM_SHA=${{ steps.tips.outputs.cesm }}
+                CROCODASH_SHA=${{ steps.tips.outputs.crocodash }}
+          tags: ${{ steps.tags.outputs.full_intel }}
+
+  # Multi-arch manifests for the moving tags, on main only.
   manifest:
-    needs: build-and-push
+    needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -143,12 +154,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create multi-arch manifest
+      - name: Create multi-arch manifests
         run: |
           BASE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          docker buildx imagetools create \
-            --tag ${BASE}:latest \
-            --tag ${BASE}:sha-${SHA} \
-            ${BASE}:latest-amd64 \
-            ${BASE}:latest-arm64
+          docker buildx imagetools create --tag ${BASE}:latest --tag ${BASE}:sha-${SHA} \
+            ${BASE}:latest-amd64 ${BASE}:latest-arm64
+          docker buildx imagetools create --tag ${BASE}:slim --tag ${BASE}:sha-${SHA}-slim \
+            ${BASE}:slim-amd64 ${BASE}:slim-arm64

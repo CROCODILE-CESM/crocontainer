@@ -1,5 +1,5 @@
 #!/bin/bash
-# Turns the gnu crocontainer image into the intel one (Dockerfile.intel):
+# Turns the slim image into slim-intel (a stage of the Dockerfile):
 #   1. ifx/icx/icpx and Intel MPI from Intel's apt repo;
 #   2. the libraries CESM links that carry Fortran modules or MPI, rebuilt with
 #      them: netcdf-fortran, PnetCDF and ESMF (netcdf-c and HDF5 stay Ubuntu's);
@@ -34,7 +34,7 @@ apt-get install -y --no-install-recommends \
     intel-oneapi-mpi-devel-${IMPI}
 rm -rf /var/lib/apt/lists/*
 
-# Dockerfile.intel's PATH, the CIME machine's settings and the loader paths
+# The slim-intel stage's PATH, the CIME machine's settings and the paths
 # below all go through these `latest` links.
 COMPILER_DIR=/opt/intel/oneapi/compiler/latest
 MPI_DIR=/opt/intel/oneapi/mpi/latest

@@ -12,8 +12,10 @@
       Docker ENV under Apptainer;
     - mpiexec runs with a host PBS job's variables removed, which would send
       the MPI launcher to a nodefile the container can't see.
-  The intel compiler and impi are used by the intel image (Dockerfile.intel),
-  which lists intel first in COMPILERS.
+    - PATH is fixed for builds and runs, so a CrocoDash conda env left active
+      (its compilers, MPI or cmake) doesn't get into them.
+  The intel compiler and impi are used by the slim-intel and intel images,
+  which list intel first in COMPILERS.
   -->
   <machine MACH="ubuntu-latest">
     <DESC>crocontainer: CESM in a container, one node, no batch system</DESC>
@@ -51,6 +53,7 @@
     </mpirun>
     <module_system type="none" />
     <environment_variables compiler="gnu">
+      <env name="PATH">/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</env>
       <env name="CC">/usr/bin/mpicc</env>
       <env name="CXX">/usr/bin/mpicxx</env>
       <env name="FC">/usr/bin/mpifort</env>
@@ -63,6 +66,7 @@
       <env name="OMPI_FC">gfortran</env>
     </environment_variables>
     <environment_variables compiler="intel">
+      <env name="PATH">/opt/intel/oneapi/mpi/latest/bin:/opt/intel/oneapi/compiler/latest/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</env>
       <env name="CC">/opt/intel/oneapi/mpi/latest/bin/mpiicx</env>
       <env name="CXX">/opt/intel/oneapi/mpi/latest/bin/mpiicpx</env>
       <env name="FC">/opt/intel/oneapi/mpi/latest/bin/mpiifx</env>

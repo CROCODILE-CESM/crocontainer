@@ -35,13 +35,11 @@ jobs:
         run: |
           podman run --rm --platform linux/amd64 ghcr.io/crocodile-cesm/crocontainer:latest-amd64 \
             bash -c "
-              source /opt/conda/etc/profile.d/conda.sh && \
-              conda activate CrocoDash && \
-              python -c 'from CrocoDash.case import Case; print(\"CrocoDash OK\")' && \
+              /opt/conda/envs/CrocoDash/bin/python -c 'from CrocoDash.case import Case; print(\"CrocoDash OK\")' && \
               test -f /workspace/CESM/cime/scripts/create_newcase && echo 'CESM OK' && \
               test -f /workspace/run_case.sh && echo 'run_case.sh OK' && \
               test -f /workspace/panama_demo_setup.sh && echo 'panama_demo_setup.sh OK' && \
-              crocodash create --help 2>&1 | grep -q -- '--configure-only' && echo 'crocodash create --configure-only OK'
+              /opt/conda/envs/CrocoDash/bin/crocodash create --help 2>&1 | grep -q -- '--configure-only' && echo 'crocodash create --configure-only OK'
             "
 
   nyf-run-test:
