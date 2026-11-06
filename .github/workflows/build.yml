@@ -19,7 +19,7 @@ env:
 # without replacing the ones people pull.
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -29,8 +29,11 @@ jobs:
         include:
           - platform: linux/amd64
             arch: amd64
+            runner: ubuntu-latest
+          # A native arm runner: under QEMU, compiling ESMF alone took over 2.5 h.
           - platform: linux/arm64
-            arch: arm64  # QEMU for now; swap to arm runner later if too slow
+            arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -73,9 +76,6 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
