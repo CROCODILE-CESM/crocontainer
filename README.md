@@ -70,4 +70,4 @@ Then in the container, activate it by full path (`~` is `/root` inside) and set 
 eval "$(micromamba shell hook -s bash)" && micromamba activate /croc/env    # or /glade/work/<you>/croc/env
 ```
 
-Building: `podman build --target slim|full [--build-arg FULL_BASE=slim-intel] .` ([`Dockerfile`](Dockerfile)). Weekly Derecho tests: [`cesm_tests/`](cesm_tests/README.md).
+More detail: [Running in a Container](https://crocodile-cesm.github.io/CrocoDash/for_users/container.html) in the CrocoDash docs. Building and CI: [`DEVELOPING.md`](DEVELOPING.md).
