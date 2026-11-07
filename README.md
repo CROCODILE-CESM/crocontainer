@@ -6,7 +6,7 @@ Containers that build and run CESM regional MOM6 cases made with [CrocoDash](htt
 
 | Image (`ghcr.io/crocodile-cesm/crocontainer:…`) | What's inside | Runs on | MPI tasks | Download |
 |---|---|---|---|---|
-| `slim` | compilers, MPI, netCDF, ESMF; **you bring CESM and a CrocoDash env** | x86-64, ARM | 1 | 0.5 GB |
+| `slim` | compilers, MPI, netCDF, ESMF; **you bring CESM and a CrocoDash env** ([how](#running-a-case)) | x86-64, ARM | 1 | 0.5 GB |
 | `slim-intel` | the same with Intel's compilers and MPI | x86-64 | as many as you have cores | 2.1 GB |
 | `latest` | `slim` + CESM (`crocodash` branch) + CrocoDash `main` and its env | x86-64, ARM | 1 | 5.0 GB |
 | `latest-intel` | `slim-intel` + the same | x86-64 | as many as you have cores | 6.7 GB |
@@ -15,31 +15,40 @@ Containers that build and run CESM regional MOM6 cases made with [CrocoDash](htt
 
 ## Running a case
 
-The container's CIME machine is `ubuntu-latest`, so in your CrocoDash YAML config set:
+A case needs three things the `slim` images don't have: a CESM checkout, a CrocoDash checkout, and a conda env with CrocoDash. You set them up once, keep them outside the container, and mount them in each time. (The [`latest` images](#the-latest-images) have all three built in.)
 
-```yaml
-case:
-  cesmroot: /path/to/CESM     # /workspace/CESM in the latest images
-  machine: ubuntu-latest
-```
-
-([`container_scripts/panama_case_config.yaml`](container_scripts/panama_case_config.yaml) is a complete example.) Then the usual commands, in the container:
+### 1. Get CESM and CrocoDash
 
 ```bash
-crocodash create --config my_case.yaml
-cd <caseroot>
-./xmlchange NTASKS=8 && ./case.setup --reset   # intel images only; the default is 1
-./case.build
-./case.submit
+git clone -b crocodash https://github.com/CROCODILE-CESM/CESM ~/croc/CESM
+(cd ~/croc/CESM && ./bin/git-fleximod update)
+git clone --recurse-submodules https://github.com/CROCODILE-CESM/CrocoDash ~/croc/CrocoDash
 ```
 
-In the `latest` images `crocodash` is ready to use. With `slim`, run it from your own CrocoDash env ([below](#slim-bring-your-own-cesm-and-crocodash)); it can stay active for `case.build`, which uses the container's compilers whatever is on your `PATH`.
+`~/croc` stands for wherever you keep them; on Derecho, use `/glade/work/$USER/croc` rather than your small home. Any CESM on the `crocodash` branch works, or one compatible with the container's ESMF 8.9.1.
 
-The run directory is `/root/cesm/scratch/<case>/run`, and with short-term archiving on, the output then moves to `/root/cesm/scratch/archive/<case>`. Mount a host directory at `/root/cesm/scratch` to keep them, and put `caseroot` and `inputdir` under it too (e.g. `/root/cesm/scratch/cases/mycase`; CrocoDash wants their parent directories to exist). CESM's input data goes at `/root/cesm/inputdata`. Forcings need their source data: on Derecho, `crocodash create` reads it from GLADE as usual; elsewhere, see [Input data](#input-data), or make the case where the data is and bring it in as a [bundle](#bringing-in-a-case-from-another-machine).
+### 2. Make the CrocoDash env
 
-### On Derecho (Apptainer)
+**On Derecho**, make it on the host as usual; a Derecho env runs in the container as it is:
 
-Build a writable sandbox once:
+```bash
+module load conda
+cd /glade/work/$USER/croc/CrocoDash && conda env create -p /glade/work/$USER/croc/env -f environment.yml
+```
+
+**On a laptop**, an env from your Mac or Windows won't run in the (Linux) container, so make it inside the container, into the mounted directory, once you've started it in step 3:
+
+```bash
+cd /croc/CrocoDash && micromamba create -y -p /croc/env -f environment.yml
+```
+
+It lasts between containers, as long as `~/croc` is always mounted at `/croc` (an env can't move).
+
+### 3. Start the container with them mounted
+
+Besides your CESM, CrocoDash and env, mount CESM's input data at `/root/cesm/inputdata` and a scratch directory at `/root/cesm/scratch`, where cases build and run.
+
+**On Derecho (Apptainer)**, build a writable sandbox once:
 
 ```bash
 module load apptainer
@@ -57,9 +66,9 @@ apptainer shell --writable --bind /glade \
   $SCRATCH/crocontainer
 ```
 
-All of `/glade` is visible at its usual paths: your CESM, your conda envs, configs and cases. `HOME` is `/root` inside (CIME reads the container's machine from `~/.cime`); your own home is at its `/glade` path, so point tools that want a file in `~`, such as `~/.cdsapirc`, at it there (e.g. `CDSAPI_RC`).
+`--bind /glade` brings in everything on `/glade` at its usual path: your CESM, CrocoDash, env, configs and cases. `HOME` is `/root` inside (CIME reads the container's machine from `~/.cime`); your own home is at its `/glade` path, so point tools that want a file in `~`, such as `~/.cdsapirc`, at it there (e.g. `CDSAPI_RC`).
 
-### On a laptop (Podman or Docker)
+**On a laptop (Podman or Docker):**
 
 ```bash
 podman run --rm -it \
@@ -69,24 +78,39 @@ podman run --rm -it \
   ghcr.io/crocodile-cesm/crocontainer:slim bash
 ```
 
-On Windows, run Podman inside WSL2. On a Mac, `podman machine init && podman machine start` first.
+On Windows, run Podman inside WSL2. On a Mac, `podman machine init && podman machine start` first. For the input data, see [Input data](#input-data).
 
-## slim: bring your own CESM and CrocoDash
+### 4. Make and run the case
 
-You need a CESM checkout (`crocodash` branch, or one compatible with the container's ESMF 8.9.1), with its components checked out, and a conda env with CrocoDash.
-
-**On Derecho**, use the ones you have: in the container, `source <your conda>/etc/profile.d/conda.sh && conda activate <your CrocoDash env>`, and point `cesmroot` at your CESM. Derecho's envs run as they are in the container.
-
-**On a laptop**, an env from your Mac or Windows won't run in the (Linux) container, so make both in it once, into the mounted `/croc`, where they last between containers:
+Activate your env with the container's `micromamba`, by its full path (inside, `~` is `/root`):
 
 ```bash
-git clone -b crocodash https://github.com/CROCODILE-CESM/CESM /croc/CESM
-cd /croc/CESM && ./bin/git-fleximod update
-git clone --recurse-submodules https://github.com/CROCODILE-CESM/CrocoDash /croc/CrocoDash
-cd /croc/CrocoDash && micromamba create -y -p /croc/env -f environment.yml
+eval "$(micromamba shell hook -s bash)"
+micromamba activate /glade/work/<you>/croc/env   # Derecho
+micromamba activate /croc/env                    # laptop
 ```
 
-Then each time: `eval "$(micromamba shell hook -s bash)" && micromamba activate /croc/env`, and `cesmroot: /croc/CESM`.
+The container's CIME machine is `ubuntu-latest`, so in your CrocoDash YAML config set:
+
+```yaml
+case:
+  cesmroot: /glade/work/<you>/croc/CESM   # /croc/CESM on a laptop
+  machine: ubuntu-latest
+```
+
+([`container_scripts/panama_case_config.yaml`](container_scripts/panama_case_config.yaml) is a complete example.) Then the usual commands:
+
+```bash
+crocodash create --config my_case.yaml
+cd <caseroot>
+./xmlchange NTASKS=8 && ./case.setup --reset   # intel images only; the default is 1
+./case.build
+./case.submit
+```
+
+The env can stay active for `case.build`, which uses the container's compilers whatever is on your `PATH`.
+
+Put `caseroot` and `inputdir` under the scratch mount so they outlast the container (e.g. `/root/cesm/scratch/cases/mycase`; CrocoDash wants their parent directories to exist). The run directory is `/root/cesm/scratch/<case>/run`, and with short-term archiving on, the output then moves to `/root/cesm/scratch/archive/<case>`. Forcings need their source data: on Derecho, `crocodash create` reads it from GLADE as usual; elsewhere, make the case where the data is and bring it in as a [bundle](#bringing-in-a-case-from-another-machine).
 
 ## The `latest` images
 
