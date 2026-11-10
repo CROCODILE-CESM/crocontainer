@@ -12,7 +12,6 @@ How to use the images: [`README.md`](README.md).
 | [`container_scripts/crocodash`](container_scripts/crocodash) | `crocodash` in the full images: runs the CLI in its env, so the env stays out of `case.build` |
 | [`container_scripts/run_case.sh`](container_scripts/run_case.sh) | The one-command run in the full images; [`panama_demo_setup.sh`](container_scripts/panama_demo_setup.sh) makes its demo case |
 | [`scripts/download_nyf_inputdata.sh`](scripts/download_nyf_inputdata.sh) | Fetches the input data a `DATM%NYF` case needs ([`nyf_inputdata_list.txt`](scripts/nyf_inputdata_list.txt)) |
-| [`cesm_tests/`](cesm_tests/README.md) | Weekly MOM_interface regional tests on Derecho, which publish the README's badges |
 
 ## Building
 

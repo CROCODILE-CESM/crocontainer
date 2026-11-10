@@ -1,11 +1,6 @@
 # crocontainer
 
 [![CESM runs in container](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/container-test.yml/badge.svg)](https://github.com/CROCODILE-CESM/crocontainer/actions/workflows/container-test.yml)
-![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.CR_JRA_GLOFAS.json)
-![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.CR1850MARBL_JRA_GLOFAS.json)
-![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.GR_JRA_GLOFAS.json)
-![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.CWR_JRA_GLOFAS.json)
-![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CROCODILE-CESM/crocontainer/test-results/SMS_D_Ld2.GWR1850MARBL_JRA_GLOFAS.json)
 
 Build and run [CrocoDash](https://github.com/CROCODILE-CESM/CrocoDash) regional MOM6 cases in CESM, with no machine port or batch queue.
 
@@ -70,4 +65,4 @@ Then in the container, activate it by full path (`~` is `/root` inside) and set 
 eval "$(micromamba shell hook -s bash)" && micromamba activate /croc/env    # or /glade/work/<you>/croc/env
 ```
 
-Building and CI: [`DEVELOPING.md`](DEVELOPING.md).
+Building and CI: [`DEVELOPING.md`](DEVELOPING.md). Weekly CESM runs of CrocoDash on Derecho, and their badges: [CrocoDashChecks](https://github.com/CROCODILE-CESM/CrocoDashChecks).
