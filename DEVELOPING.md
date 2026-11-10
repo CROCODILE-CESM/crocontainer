@@ -1,6 +1,6 @@
 # Developing crocontainer
 
-How to use the images: [Running in a Container](https://crocodile-cesm.github.io/CrocoDash/for_users/container.html) in the CrocoDash docs.
+How to use the images: [`README.md`](README.md).
 
 ## Files
 
